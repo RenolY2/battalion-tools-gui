@@ -9,27 +9,103 @@
 import random
 from PyQt5 import Qt, QtCore, QtGui, QtWidgets
 
+from timeit import default_timer
+
+ENTITY_SIZE = 10
+
 class BWMapViewer(QtWidgets.QWidget):
+    mouse_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent)
+    entity_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent, tuple, int)
+
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.setMinimumSize(QtCore.QSize(512, 512))
-        self.setMaximumWidth(512)
+        SIZEX = 1024
+        SIZEY = 1024
+
+
+        self.setMinimumSize(QtCore.QSize(SIZEX, SIZEY))
+        self.setMaximumSize(QtCore.QSize(SIZEX, SIZEY))
         self.setObjectName("bw_map_screen")
 
 
+        self.point_x = 0
+        self.point_y = 0
+
+        self.entities = [(0,0, "abc")]
+
+        self.current_entity = None
+
+    def choose_entity(self, pos):
+        assert pos < len(self.entities)
+        name = self.entities[pos][2]
+        self.current_entity = (pos, name)
+
+        self.update()
+
+
+    def add_entities(self, entities):
+        for x, y, entityid in entities:
+            self.entities.append((x, y, entityid))
+
+
     def paintEvent(self, event):
+        start = default_timer()
         p = QtGui.QPainter(self)
         p.begin(self)
         h = self.height()
         w = self.width()
         p.setBrush(QtGui.QColor("white"))
-        p.drawRect(0, 0, h, w)
+        p.drawRect(0, 0, h-1, w-1)
 
 
+        p.setBrush(QtGui.QColor("black"))
+        for i, entity in enumerate(self.entities):
+            x, y, name = entity
 
+            if self.current_entity is not None and i == self.current_entity[0]:
+                p.setBrush(QtGui.QColor("red"))
+
+                p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
+
+                p.setBrush(QtGui.QColor("black"))
+            else:
+                p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
 
         p.end()
+        end = default_timer()
+
+        print("time taken:", end-start, "sec")
+
+    def set_pos(self, x, y):
+        self.entities.append((x,y,random.randint(10,50)))
+        self.update()
+
+    def mousePressEvent(self, event):
+        #x,y = event.localPos()
+        #if event.x() < self.height() and event.y() < self.width:
+
+        print(event.x(),event.y())
+        event_x, event_y = event.x(), event.y()
+        hit = False
+        search_start = default_timer()
+        for i, entity in enumerate(self.entities):
+            x, y, name = entity
+
+            if (event_x > (x - ENTITY_SIZE//2) and event_x < (x + ENTITY_SIZE//2)
+                and event_y > (y - ENTITY_SIZE//2) and event_y < (y + ENTITY_SIZE//2)):
+                hit = True
+                search_end = default_timer()
+                print("time for search:", search_end-search_start, "sec")
+                self.entity_clicked.emit(event, entity, i)
+
+
+
+
+        if hit is False:
+            self.mouse_clicked.emit(event)
+
         """
         for i in range(1, h, h/5):
             p.setPen(QtGui.QColor("lightgray"))
@@ -67,6 +143,26 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         self.entity_list_widget.currentItemChanged.connect(self.change_text)
         self.pushButton_2.pressed.connect(self.next_item)
+        self.bw_map_screen.mouse_clicked.connect(self.get_position)
+        self.pushButton_3.pressed.connect(self.remove_position)
+        self.bw_map_screen.entity_clicked.connect(self.entity_position)
+
+    def entity_position(self, event, entity, i):
+        print("got entity:",entity)
+        self.label_5.setText("Entity:{0}".format(entity[2]))
+        self.bw_map_screen.choose_entity(i)
+
+    def remove_position(self):
+        self.bw_map_screen.entities.pop()
+        self.bw_map_screen.update()
+
+
+    def get_position(self, event):
+        self.label_4.setText("x: {0} y: {1}".format(event.x(), event.y()))
+        self.bw_map_screen.set_pos(event.x(), event.y())
+        last_id = len(self.bw_map_screen.entities) - 1
+        print(last_id, self.bw_map_screen.entities)
+        self.bw_map_screen.choose_entity(last_id)
 
     def change_text(self, current, previous):
         #QtWidgets.QListWidgetItem.
@@ -74,6 +170,11 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.label.setText(str(current.xml_ref))
 
         self.label_2.setText(str(current.xml_ref+random.randint(10,50)))
+
+        num = int(current.text().split(" ")[1])
+        self.bw_map_screen.choose_entity(num)
+        posx, posy = self.bw_map_screen.entities[num][0:2]
+        self.scrollArea.ensureVisible(posx, posy)
         pass
 
     def next_item(self):
@@ -99,12 +200,18 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.centralwidget)
         self.horizontalLayout.setObjectName("horizontalLayout")
 
-        self.bw_map_screen = BWMapViewer(self.centralwidget)
 
-        self.horizontalLayout.addWidget(self.bw_map_screen)
+        self.scrollArea = QtWidgets.QScrollArea(self.centralwidget)
+        self.scrollArea.setWidgetResizable(True)
+
+        self.bw_map_screen = BWMapViewer(self.centralwidget)
+        self.scrollArea.setWidget(self.bw_map_screen)
+        self.horizontalLayout.addWidget(self.scrollArea)
+
+        #self.horizontalLayout.addWidget(self.bw_map_screen)
 
         self.entity_list_widget = BWEntityListWidget(self.centralwidget)
-        self.entity_list_widget.setMaximumSize(QtCore.QSize(400, 16777215))
+        self.entity_list_widget.setMaximumSize(QtCore.QSize(200, 16777215))
         self.entity_list_widget.setObjectName("entity_list_widget")
         self.horizontalLayout.addWidget(self.entity_list_widget)
 
@@ -190,7 +297,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.pushButton_4.setText(_translate("MainWindow", "Clone Entity"))
         self.pushButton_5.setText(_translate("MainWindow", "Delete Entity"))
         self.pushButton_2.setText(_translate("MainWindow", "Increment"))
-        self.pushButton_3.setText(_translate("MainWindow", "PushButton 1"))
+        self.pushButton_3.setText(_translate("MainWindow", "Undo"))
         self.label.setText(_translate("MainWindow", "TextLabel1"))
         self.label_2.setText(_translate("MainWindow", "TextLabel2"))
         self.label_3.setText(_translate("MainWindow", "TextLabel3"))
