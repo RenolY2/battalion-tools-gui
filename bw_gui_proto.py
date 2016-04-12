@@ -15,7 +15,7 @@ ENTITY_SIZE = 10
 
 class BWMapViewer(QtWidgets.QWidget):
     mouse_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent)
-    entity_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent, tuple, int)
+    entity_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent, str)
 
 
     def __init__(self, *args, **kwargs):
@@ -33,22 +33,33 @@ class BWMapViewer(QtWidgets.QWidget):
         self.point_x = 0
         self.point_y = 0
 
-        self.entities = [(0,0, "abc")]
-
+        #self.entities = [(0,0, "abc")]
+        self.entities = {"abc": (0, 0)}
         self.current_entity = None
 
-    def choose_entity(self, pos):
-        assert pos < len(self.entities)
-        name = self.entities[pos][2]
-        self.current_entity = (pos, name)
+    def choose_entity(self, entityid):
+        self.current_entity = entityid
 
         self.update()
 
-
     def add_entities(self, entities):
         for x, y, entityid in entities:
-            self.entities.append((x, y, entityid))
+            #self.entities.append((x, y, entityid))
+            self.entities[entityid] = (x, y)
 
+    def remove_entity(self, entityid):
+        # If the entity is selected, unselect it before deleting it.
+        if self.current_entity is not None:
+            if entityid == self.current_entity:
+                self.current_entity = None
+
+        del self.entities[entityid]
+
+
+    def add_entity(self, x, y, entityid):
+        #self.entities.append((x, y, random.randint(10, 50)))
+        self.entities[entityid] = (x, y)
+        self.update()
 
     def paintEvent(self, event):
         start = default_timer()
@@ -61,26 +72,25 @@ class BWMapViewer(QtWidgets.QWidget):
 
 
         p.setBrush(QtGui.QColor("black"))
-        for i, entity in enumerate(self.entities):
-            x, y, name = entity
+        for entity, position in self.entities.items():
+            x, y = position
 
-            if self.current_entity is not None and i == self.current_entity[0]:
-                p.setBrush(QtGui.QColor("red"))
-
+            if self.current_entity != entity:
                 p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
 
-                p.setBrush(QtGui.QColor("black"))
-            else:
-                p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
+        # Draw the currently selected entity last so it is always above all other entities.
+        if self.current_entity is not None:
+            x, y = self.entities[self.current_entity]
+            p.setBrush(QtGui.QColor("red"))
+
+            p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
+
+            p.setBrush(QtGui.QColor("black"))
 
         p.end()
         end = default_timer()
 
         print("time taken:", end-start, "sec")
-
-    def set_pos(self, x, y):
-        self.entities.append((x,y,random.randint(10,50)))
-        self.update()
 
     def mousePressEvent(self, event):
         #x,y = event.localPos()
@@ -90,27 +100,19 @@ class BWMapViewer(QtWidgets.QWidget):
         event_x, event_y = event.x(), event.y()
         hit = False
         search_start = default_timer()
-        for i, entity in enumerate(self.entities):
-            x, y, name = entity
+        for entity, position in self.entities.items():
+            x, y = position
 
             if (event_x > (x - ENTITY_SIZE//2) and event_x < (x + ENTITY_SIZE//2)
                 and event_y > (y - ENTITY_SIZE//2) and event_y < (y + ENTITY_SIZE//2)):
                 hit = True
                 search_end = default_timer()
                 print("time for search:", search_end-search_start, "sec")
-                self.entity_clicked.emit(event, entity, i)
-
-
-
+                self.entity_clicked.emit(event, entity)
 
         if hit is False:
             self.mouse_clicked.emit(event)
 
-        """
-        for i in range(1, h, h/5):
-            p.setPen(QtGui.QColor("lightgray"))
-            p.drawLine(0, i, w, i)
-        """
 
 class BWEntityEntry(QtWidgets.QListWidgetItem):
     def __init__(self, xml_ref, *args, **kwargs):
@@ -128,8 +130,6 @@ class BWEntityListWidget(QtWidgets.QListWidget):
         self.setCurrentIndex(pos)
 
 
-
-
 class EditorMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -143,26 +143,32 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         self.entity_list_widget.currentItemChanged.connect(self.change_text)
         self.pushButton_2.pressed.connect(self.next_item)
-        self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.pushButton_3.pressed.connect(self.remove_position)
+
+        self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
 
-    def entity_position(self, event, entity, i):
+    def entity_position(self, event, entity):
         print("got entity:",entity)
-        self.label_5.setText("Entity:{0}".format(entity[2]))
-        self.bw_map_screen.choose_entity(i)
+        self.label_5.setText("Entity:{0}".format(entity))
+        self.bw_map_screen.choose_entity(entity)
 
     def remove_position(self):
-        self.bw_map_screen.entities.pop()
-        self.bw_map_screen.update()
-
+        #self.bw_map_screen.entities.pop()
+        current_entity = self.bw_map_screen.current_entity
+        if current_entity  is not None:
+            self.bw_map_screen.remove_entity(current_entity)
+            self.bw_map_screen.update()
 
     def get_position(self, event):
         self.label_4.setText("x: {0} y: {1}".format(event.x(), event.y()))
-        self.bw_map_screen.set_pos(event.x(), event.y())
-        last_id = len(self.bw_map_screen.entities) - 1
-        print(last_id, self.bw_map_screen.entities)
-        self.bw_map_screen.choose_entity(last_id)
+
+        name = str(random.randint(0, 100000))
+        while name in self.bw_map_screen.entities:
+            name = str(random.randint(0, 100000))
+
+        self.bw_map_screen.add_entity(event.x(), event.y(), name)
+        self.bw_map_screen.choose_entity(name)
 
     def change_text(self, current, previous):
         #QtWidgets.QListWidgetItem.
@@ -172,10 +178,13 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.label_2.setText(str(current.xml_ref+random.randint(10,50)))
 
         num = int(current.text().split(" ")[1])
-        self.bw_map_screen.choose_entity(num)
-        posx, posy = self.bw_map_screen.entities[num][0:2]
+
+        name = [k for k in self.bw_map_screen.entities.keys()][num]
+
+        self.bw_map_screen.choose_entity(name)
+
+        posx, posy = self.bw_map_screen.entities[name]
         self.scrollArea.ensureVisible(posx, posy)
-        pass
 
     def next_item(self):
         print("pressed")
@@ -278,15 +287,21 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 820, 29))
         self.menubar.setObjectName("menubar")
-        self.menuLoad = QtWidgets.QMenu(self.menubar)
-        self.menuLoad.setObjectName("menuLoad")
+        self.file_menu = QtWidgets.QMenu(self.menubar)
+        self.file_menu.setObjectName("menuLoad")
+
+        self.file_save_action = QtWidgets.QAction("Save", self)
+        self.file_menu.addAction(self.file_save_action)
+
+
+
         self.menuLoad_2 = QtWidgets.QMenu(self.menubar)
         self.menuLoad_2.setObjectName("menuLoad_2")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
-        self.menubar.addAction(self.menuLoad.menuAction())
+        self.menubar.addAction(self.file_menu.menuAction())
         self.menubar.addAction(self.menuLoad_2.menuAction())
 
         self.retranslateUi(MainWindow)
@@ -303,8 +318,8 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.label_3.setText(_translate("MainWindow", "TextLabel3"))
         self.label_4.setText(_translate("MainWindow", "TextLabel4"))
         self.label_5.setText(_translate("MainWindow", "TextLabel5"))
-        self.menuLoad.setTitle(_translate("MainWindow", "Save"))
-        self.menuLoad_2.setTitle(_translate("MainWindow", "Load"))
+        self.file_menu.setTitle(_translate("MainWindow", "File"))
+        #self.menuLoad_2.setTitle(_translate("MainWindow", "Load"))
 
 if __name__ == "__main__":
     import sys
