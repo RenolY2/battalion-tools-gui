@@ -7,9 +7,12 @@
 # WARNING! All changes made in this file will be lost!
 
 import random
+import traceback
+from timeit import default_timer
+
 from PyQt5 import Qt, QtCore, QtGui, QtWidgets
 
-from timeit import default_timer
+from lib.bw_read_xml import BattWarsLevel
 
 ENTITY_SIZE = 10
 
@@ -137,6 +140,10 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.setupUi(self)
         self.retranslateUi(self)
 
+        self.level = None
+        self.default_path = ""
+
+
         for i in range(100):
             item = BWEntityEntry(random.randint(0, 100), "Item {0}".format(i))
             self.entity_list_widget.addItem(item)
@@ -147,6 +154,37 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
+
+    def button_load_level(self):
+        self.xmlPath = ""
+        filepath, choosentype = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open File",
+            self.default_path,
+            "BW level files (*_level.xml);;All files (*)")
+
+        if filepath:
+            with open(filepath, "rb") as f:
+                try:
+                    self.level = BattWarsLevel(f)
+                    self.default_path = filepath
+                except Exception as error:
+                    print("error", error)
+        print("loaded")
+
+    def button_save_level(self):
+        if self.level is not None:
+            filepath, choosentype = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save File",
+                self.default_path,
+                "BW level files (*_level.xml);;All files (*)")
+            print(filepath, "saved")
+            if filepath:
+                with open(filepath, "wb") as f:
+                    self.level._tree.write(f)
+
+                self.default_path = filepath
+        else:
+            pass # no level loaded, do nothing
 
     def entity_position(self, event, entity):
         print("got entity:",entity)
@@ -290,7 +328,13 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.file_menu = QtWidgets.QMenu(self.menubar)
         self.file_menu.setObjectName("menuLoad")
 
+
+
+        self.file_load_action = QtWidgets.QAction("Load", self)
+        self.file_load_action.triggered.connect(self.button_load_level)
+        self.file_menu.addAction(self.file_load_action)
         self.file_save_action = QtWidgets.QAction("Save", self)
+        self.file_save_action.triggered.connect(self.button_save_level)
         self.file_menu.addAction(self.file_save_action)
 
 
