@@ -76,6 +76,20 @@ class BattWarsLevel(object):
                 else:
                     self.resources[res_type].append(bw_object)
 
+    # Todo: synchronize the resources dict
+    def add_object(self, xml_node):
+        bwobj = BattWarsObject(xml_node)
+        assert bwobj.id not in self.obj_map
+        self._root.append(xml_node)
+        self.obj_map[bwobj.id] = bwobj
+
+    def remove_object(self, objectid):
+        pos = None
+        obj = self.obj_map[objectid]
+        self._root.remove(obj._xml_node)
+        del self.obj_map[objectid]
+
+
     # The root of a BW level xml file contains the objects
     # used by that level.
     @property
