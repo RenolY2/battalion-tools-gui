@@ -9,6 +9,7 @@
 import random
 import traceback
 import copy
+import os
 from timeit import default_timer
 
 from PyQt5 import Qt, QtCore, QtGui, QtWidgets
@@ -41,12 +42,22 @@ def bw_coords_to_image_coords(bw_x, bw_y):
 
     return img_x, img_y
 
+
 def image_coords_to_bw_coords(img_x, img_y):
     bw_x = img_x*2 - (4096//2)
-    bw_y = img_y*2 - (4096//2)
-    bw_y = (4096//2) - bw_y
+    bw_y = (4096//2) - 2*img_y
+
+    #print(img_x, img_y, bw_x, bw_y)
 
     return bw_x, bw_y
+
+for ix in range(0, 2048+1, 1024):
+    for iy in range(0, 2048+1, 1024):
+        x, y = image_coords_to_bw_coords(ix, iy)
+        print(ix, iy, x, y, bw_coords_to_image_coords(x, y))
+
+
+
 
 def entity_get_model(xml, entityid):
     try:
@@ -61,6 +72,74 @@ def entity_get_model(xml, entityid):
         traceback.print_exc()
         return None
 
+
+def entity_get_army(xml, entityid):
+    try:
+        entityobj = xml.obj_map[entityid]
+        baseobj = xml.obj_map[entityobj.get_attr_value("mBase")]
+
+        return baseobj.get_attr_value("mArmy")
+    except:
+        traceback.print_exc()
+        return None
+
+
+def entity_get_icon_type(xml, entityid):
+    try:
+        entityobj = xml.obj_map[entityid]
+        baseobj = xml.obj_map[entityobj.get_attr_value("mBase")]
+
+        return baseobj.get_attr_value("unitIcon")
+    except:
+        traceback.print_exc()
+        return None
+
+
+def set_default_path(path):
+    print("WRITING", path)
+    try:
+        with open("default_path.cfg", "wb") as f:
+            f.write(bytes(path, encoding="utf-8"))
+    except Exception as error:
+        print("couldn't write path")
+        traceback.print_exc()
+        pass
+
+
+def get_default_path():
+    print("READING")
+    try:
+        with open("default_path.cfg", "rb") as f:
+            path = str(f.read(), encoding="utf-8")
+        return path
+    except:
+        return None
+
+
+
+def generate_unique_id(xml, id_base):
+    base_str = str(id_base)
+    prefix = int(base_str[0:2])
+
+    digits = len(base_str)-2
+    rest = int(base_str[2:])
+
+    newid = int(id_base)
+    newid_str = None
+    done = False
+
+    # We keep the first two digits, but choose the remaining digits in such a way that
+    # they are unique.
+    for i in range(10**digits):
+        newid = prefix * (10**digits) + ((rest + 7*i) % (10**digits))
+        newid_str = str(newid)
+
+        if newid_str not in xml.obj_map:
+            break # We made a new unique object id!
+
+    #print("original id:",id_base)
+    #print("new id:", newid_str)
+    return newid_str
 
 def object_get_position(xml, entityid):
     obj = xml.obj_map[entityid]
@@ -113,6 +192,22 @@ class BWMapViewer(QtWidgets.QWidget):
         self.entities = {}#{"abc": (0, 0)}
         self.current_entity = None
 
+    def reset(self):
+        del self.entities
+        self.entities = {}
+        self.current_entity = None
+
+        self.point_x = self.point_y = 0
+
+        self.next_selected_index = 0
+        self.zoom_factor = 1
+
+        self.SIZEX = 2048#1024
+        self.SIZEY = 2048#1024
+
+        self.setMinimumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
+        self.setMaximumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
+
     def choose_entity(self, entityid):
         self.current_entity = entityid
 
@@ -146,7 +241,6 @@ class BWMapViewer(QtWidgets.QWidget):
         else:
             pass # Don't need to do anything if the old id is the same as the new id
 
-
     def add_entity(self, x, y, entityid, entitytype, update=True):
         #self.entities.append((x, y, random.randint(10, 50)))
         self.entities[entityid] = [x, y, entitytype]
@@ -157,9 +251,10 @@ class BWMapViewer(QtWidgets.QWidget):
             self.update()
 
     def zoom(self, fac):
-        # We don't allow a zoom factor of <=0 or bigger than 25.
-        if (self.zoom_factor + fac) > 0 and (self.zoom_factor + fac) <= 25:
+
+        if (self.zoom_factor + fac) > 0.5 and (self.zoom_factor + fac) <= 25:
             self.zoom_factor += fac
+            self.zoom_factor = round(self.zoom_factor, 2)
             zf = self.zoom_factor
             self.setMinimumSize(QtCore.QSize(self.SIZEX*zf, self.SIZEY*zf))
             self.setMaximumSize(QtCore.QSize(self.SIZEX*zf, self.SIZEY*zf))
@@ -230,8 +325,6 @@ class BWMapViewer(QtWidgets.QWidget):
 
         entities_hit = []
 
-
-
         for entity, data in self.entities.items():
             x, y, entitytype = data
             x *= self.zoom_factor
@@ -272,7 +365,7 @@ class BWEntityListWidget(QtWidgets.QListWidget):
 
     def select_item(self, pos):
         #item = self.item(pos)
-        self.setCurrentIndex(pos)
+        self.setCurrentRow(pos)
 
 
 def get_type(typename):
@@ -290,7 +383,11 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.retranslateUi(self)
 
         self.level = None
-        self.default_path = ""
+        path = get_default_path()
+        if path is None:
+            self.default_path = ""
+        else:
+            self.default_path = path
 
         self.dragging = False
         self.last_x = None
@@ -299,16 +396,118 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         self.moving = False
 
+        self.resetting = False
+
         self.entity_list_widget.currentItemChanged.connect(self.change_text)
         self.button_zoom_in.pressed.connect(self.zoom_in)
         self.button_zoom_out.pressed.connect(self.zoom_out)
-        self.pushButton_3.pressed.connect(self.remove_position)
+        self.button_remove_entity.pressed.connect(self.remove_position)
         self.button_move_entity.pressed.connect(self.move_entity)
+        self.button_clone_entity.pressed.connect(self.action_clone_entity)
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
         self.bw_map_screen.mouse_dragged.connect(self.mouse_move)
         self.bw_map_screen.mouse_released.connect(self.mouse_release)
+
+        status = self.statusbar
+        self.bw_map_screen.setMouseTracking(True)
+
+    def reset(self):
+        self.resetting = True
+        self.statusbar.clearMessage()
+        self.dragged_time = None
+        self.moving = False
+        #self.default_path = ""
+        print("so far so well")
+        self.dragging = False
+        self.last_x = None
+        self.last_y = None
+        self.dragged_time = None
+
+        self.moving = False
+        print("good")
+
+        self.entity_list_widget.clearSelection()
+        self.entity_list_widget.clear()
+        #del self.level
+        #self.level = None
+        print("list cleared")
+        self.bw_map_screen.reset()
+        self.resetting = False
+
+    def action_clone_entity(self):
+        currentity = self.bw_map_screen.current_entity
+
+        if currentity is not None:
+            obj = self.level.obj_map[currentity]
+            xml_node = copy.deepcopy(obj._xml_node)
+            try:
+                newid = generate_unique_id(self.level, currentity)
+                xml_node.set("id", newid)
+                self.level.add_object(xml_node)
+
+                bw_x, bw_y = object_get_position(self.level, newid)
+                print("CURRENT_POSITION", bw_x, bw_y)
+                x, y = bw_coords_to_image_coords(bw_x, bw_y)
+                print(bw_x, bw_y, (image_coords_to_bw_coords(x, y)))
+
+                self.add_item_sorted(newid)
+
+                self.bw_map_screen.add_entity(x, y, newid, obj.type)
+
+                #self.choose_entity(newid)
+                self.bw_map_screen.choose_entity(newid)
+                self.set_entity_text(newid)
+                print("CREATED:", newid)
+
+
+                newobj = self.level.obj_map[newid]
+
+                if newobj.has_attr("mPassenger"):
+                    print("COPYING PASSENGERS")
+                    orig_x = bw_x
+                    orig_y = bw_y
+                    passengers = newobj.get_attr_elements("mPassenger")
+
+                    passengers_added = []
+
+                    for i, passenger in enumerate(passengers):
+                        if passenger != "0":
+                            obj = self.level.obj_map[passenger]
+                            xml_node = copy.deepcopy(obj._xml_node)
+
+                            newid = generate_unique_id(self.level, passenger)
+                            xml_node.set("id", newid)
+                            print("orig passenger: {0}, new passenger: {1}, alreadyexists: {2}".format(
+                                passenger, newid, newid in self.level.obj_map
+                            ))
+                            print(type(passenger), type(newid))
+
+                            self.level.add_object(xml_node)
+                            #x, y = object_get_position(self.level, newid)
+                            x = orig_x + (i+1)*8
+                            y = orig_y + (i+1)*8
+                            print(orig_x, orig_y, x, y)
+                            object_set_position(self.level, newid, x, y)
+                            x, y = bw_coords_to_image_coords(x, y)
+
+
+                            self.add_item_sorted(newid)
+                            #item = BWEntityEntry(newid, "{0}[{1}]".format(newid, obj.type))
+                            #self.entity_list_widget.addItem(item)
+                            self.bw_map_screen.add_entity(x, y, newid, obj.type)
+                            passengers_added.append(passenger)
+                    print("passengers added:", passengers_added)
+                    """if len(passengers_added) > 0:
+                        QtWidgets.QMessageBox.information(self, "MessageInfo",
+                                                        "The following passengers were added: {0}".format(
+                                                            ", ".join(passengers_added)
+                                                        )
+
+                        )"""
+            except:
+                traceback.print_exc()
 
     def add_item_sorted(self, entity):
         max_count = self.entity_list_widget.count()
@@ -318,7 +517,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         # Similar to loading a level, we add the entity in a sorted way by
         # creating this string and comparing it for every item in the list.
-        entity_string = get_type(entityobj.type)+entityobj.type
+        entity_string = get_type(entityobj.type)+entityobj.type+entityobj.id
 
         inserted = False
 
@@ -351,48 +550,70 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
     def move_entity(self):
         if not self.dragging:
-            self.moving = True
+            if not self.moving:
+                self.moving = True
+                currtext = self.button_move_entity.text()
+                self.button_move_entity.setText("Stop ["+currtext+"]")
+            else:
+                self.moving = False
 
-    def choose_entity(self, entityid):
+                currtext = self.button_move_entity.text()
+                currtext = currtext[6:]
+                currtext = currtext.strip("[]")
+                self.button_move_entity.setText(currtext)
+
+
+    """def choose_entity(self, entityid):
         entityobj = self.level.obj_map[entityid]
         self.bw_map_screen.choose_entity(entityid)
-        pos = self.get_entity_item_pos(entityid)
-        self.entity_list_widget.setCurrentIndex(pos)
-        self.label_object_id.setText("ID: {0}".format(entityid))
 
         self.label_object_id.setText("ID: {0}".format(entityid))
+
+        self.label_object_id.setText("ID: {0}".format(entityid))"""
 
     def button_load_level(self):
-        self.xmlPath = ""
-        filepath, choosentype = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open File",
-            self.default_path,
-            "BW level files (*_level.xml);;All files (*)")
+        try:
+            print("ok", self.default_path)
+            self.xmlPath = ""
+            filepath, choosentype = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Open File",
+                self.default_path,
+                "BW level files (*_level.xml);;All files (*)")
+            print("doooone")
+            if filepath:
+                print("resetting")
+                self.reset()
+                print("done")
 
-        if filepath:
-            with open(filepath, "rb") as f:
-                try:
-                    self.level = BattWarsLevel(f)
-                    self.default_path = filepath
+                with open(filepath, "rb") as f:
+                    try:
+                        self.level = BattWarsLevel(f)
+                        self.default_path = filepath
+                        set_default_path(filepath)
 
-                    for obj_id, obj in sorted(self.level.obj_map.items(),
-                                              key=lambda x: get_type(x[1].type)+x[1].type):
-                        print("doing", obj_id)
-                        if not obj.has_attr("Mat"):
-                            continue
-                        x, y = object_get_position(self.level, obj_id)
-                        x, y = bw_coords_to_image_coords(x, y)
+                        for obj_id, obj in sorted(self.level.obj_map.items(),
+                                                  key=lambda x: get_type(x[1].type)+x[1].type+x[1].id):
+                            print("doing", obj_id)
+                            if not obj.has_attr("Mat"):
+                                continue
+                            x, y = object_get_position(self.level, obj_id)
+                            x, y = bw_coords_to_image_coords(x, y)
 
-                        item = BWEntityEntry(obj_id, "{0}[{1}]".format(obj_id, obj.type))
-                        self.entity_list_widget.addItem(item)
+                            item = BWEntityEntry(obj_id, "{0}[{1}]".format(obj_id, obj.type))
+                            self.entity_list_widget.addItem(item)
 
+                            self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
+                        print("ok")
+                        self.bw_map_screen.update()
+                        path_parts = os.path.split(filepath)
+                        self.setWindowTitle("BW-MapEdit - {0}".format(path_parts[-1]))
 
-                        self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
-                    self.bw_map_screen.update()
-
-                except Exception as error:
-                    print("error", error)
-                    traceback.print_exc()
+                    except Exception as error:
+                        print("error", error)
+                        traceback.print_exc()
+        except Exception as er:
+            print("errrorrr", error)
+            traceback.print_exc()
         print("loaded")
 
     def button_save_level(self):
@@ -415,19 +636,32 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         print(entity_get_model(self.level, entity))
         self.set_entity_text(entity)
         self.bw_map_screen.choose_entity(entity)
-
+        pos = self.get_entity_item_pos(entity)
+        print("searching:",pos)
+        try:
+            self.entity_list_widget.select_item(pos)
+        except:
+            traceback.print_exc()
         self.bw_map_screen.update()
 
     def remove_position(self):
         #self.bw_map_screen.entities.pop()
         current_entity = self.bw_map_screen.current_entity
-        if current_entity  is not None:
-            self.bw_map_screen.remove_entity(current_entity)
-            self.bw_map_screen.update()
+        if current_entity is not None:
+            try:
+                # Remove the entity from the map, the list widget and the level data
+                pos = self.get_entity_item_pos(current_entity)
+                item = self.entity_list_widget.takeItem(pos)
+                assert item.xml_ref == current_entity
+                self.entity_list_widget.removeItemWidget(item)
+                self.level.remove_object(current_entity)
+                self.bw_map_screen.remove_entity(current_entity)
+                self.bw_map_screen.update()
+            except:
+                traceback.print_exc()
+                raise
 
     def get_position(self, event):
-        self.label_4.setText("x: {0} y: {1}".format(event.x(), event.y()))
-
         self.dragging = True
         self.last_x = event.x()
         self.last_y = event.y()
@@ -437,19 +671,27 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         y = event.y()/self.bw_map_screen.zoom_factor
 
         if not self.moving:
-            name = str(random.randint(0, 100000))
-            while name in self.bw_map_screen.entities:
-                name = str(random.randint(0, 100000))
-
-            self.bw_map_screen.add_entity(x, y, name, "bla")
-            self.bw_map_screen.choose_entity(name)
+            pass
         else:
             if self.bw_map_screen.current_entity is not None:
+                newx, newy = image_coords_to_bw_coords(x, y)
+                print("Old position:", object_get_position(self.level, self.bw_map_screen.current_entity))
+                object_set_position(self.level, self.bw_map_screen.current_entity,
+                                    newx, newy)
                 self.bw_map_screen.move_entity(self.bw_map_screen.current_entity,
                                                x, y)
+                self.set_entity_text(self.bw_map_screen.current_entity)
+
+                print("New position:", object_get_position(self.level, self.bw_map_screen.current_entity))
+
+
         self.bw_map_screen.update()
 
     def mouse_move(self, event):
+        x, y = image_coords_to_bw_coords(event.x()/self.bw_map_screen.zoom_factor,
+                                         event.y()/self.bw_map_screen.zoom_factor)
+        self.statusbar.showMessage("x: {0} y: {1}".format(x, y))
+
         if self.dragging and default_timer() - self.dragged_time > 0.1:
             delta_x = (event.x()-self.last_x)/8
             delta_y = (event.y()-self.last_y)/8
@@ -457,33 +699,57 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
             vertbar = self.scrollArea.verticalScrollBar()
             horizbar = self.scrollArea.horizontalScrollBar()
-            #self.scrollArea.scrollContentsBy(delta_x, delta_y)
 
             vertbar.setSliderPosition(vertbar.value()-delta_y)
             horizbar.setSliderPosition(horizbar.value()-delta_x)
 
     def mouse_release(self, event):
-        print("ok", event.x(), event.y())
         self.dragging = False
 
     def set_entity_text(self, entityid):
-        obj = self.level.obj_map[entityid]
-        self.label_object_id.setText("{0}\n[{1}]".format(entityid, obj.type))
-        self.label_model_name.setText(entity_get_model(self.level, entityid))
-        x, y = object_get_position(self.level, entityid)
-        self.label_position.setText("x: {0}\nsy: {1}".format(x, y))
+        try:
+            obj = self.level.obj_map[entityid]
+            if obj.has_attr("mBase"):
+                base = self.level.obj_map[obj.get_attr_value("mBase")]
+                self.label_object_id.setText("{0}\n[{1}]\nBase: {2}\n[{3}]".format(
+                    entityid, obj.type, base.id, base.type))
+            else:
+                self.label_object_id.setText("{0}\n[{1}]".format(entityid, obj.type))
+            self.label_model_name.setText("Model: {0}".format(entity_get_model(self.level, entityid)))
+            x, y = object_get_position(self.level, entityid)
+            self.label_position.setText("x: {0}\ny: {1}".format(x, y))
+
+            self.label_4.setText("Army: {0}".format(entity_get_army(self.level, entityid)))
+            if not obj.has_attr("mPassenger"):
+                self.label_5.setText("Icon Type: \n{0}".format(entity_get_icon_type(self.level, entityid)))
+            else:
+
+                passengers = 0
+                for passenger in obj.get_attr_elements("mPassenger"):
+                    if passenger != "0":
+                        passengers += 1
+                self.label_5.setText("Icon Type: \n{0}\n\nPassengers: {1}".format(
+                    entity_get_icon_type(self.level, entityid), passengers))
+        except:
+            traceback.print_exc()
+
 
     def change_text(self, current, previous):
         #QtWidgets.QListWidgetItem.
-        print("hi", current.text(), current.xml_ref)
+        if not self.resetting:
+            print("ok")
+            print("hi", current.text(), current.xml_ref)
 
-        self.set_entity_text(current.xml_ref)
-        self.bw_map_screen.choose_entity(current.xml_ref)
+            self.set_entity_text(current.xml_ref)
+            self.bw_map_screen.choose_entity(current.xml_ref)
 
-        posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
-        zf = self.bw_map_screen.zoom_factor
-        self.scrollArea.ensureVisible(posx*zf, posy*zf)
-
+            posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
+            zf = self.bw_map_screen.zoom_factor
+            try:
+                self.scrollArea.ensureVisible(posx*zf, posy*zf,
+                                              xMargin=int(50*zf), yMargin=int(50*zf))
+            except:
+                traceback.print_exc()
     def zoom_out(self):
 
         horizbar = self.scrollArea.horizontalScrollBar()
@@ -493,8 +759,11 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         widthratio = horizbar.value()/horizbar.maximum()
         heightratio = vertbar.value()/vertbar.maximum()
 
-        self.bw_map_screen.zoom(-0.2)
-
+        #oldzf = self.bw_map_screen.zoom_factor / (0.1+1)
+        #diff = oldzf - self.bw_map_screen.zoom_factor
+        #zf = self.bw_map_screen.zoom_factor/1.10
+        self.bw_map_screen.zoom(-0.2)#diff)
+        self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
 
@@ -507,16 +776,19 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         print(itemcount, curr_poset
         #self.entity_list_widget.select_item(curr_pos+1 % itemcount)
         self.entity_list_widget.setCurrentRow((curr_pos+7) % itemcount)"""
-
+        print("wtf")
         horizbar = self.scrollArea.horizontalScrollBar()
         vertbar = self.scrollArea.verticalScrollBar()
 
-
+        print("wat")
         widthratio = horizbar.value()/horizbar.maximum()
         heightratio = vertbar.value()/vertbar.maximum()
+        print("ok")
+        #zf = self.bw_map_screen.zoom_factor*0.10
+        self.bw_map_screen.zoom(0.2)#zf)
+        self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
 
-        self.bw_map_screen.zoom(0.2)
-
+        print("wedidit?")
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
 
@@ -563,9 +835,9 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.button_clone_entity.setObjectName("button_clone_entity")
         self.verticalLayout.addWidget(self.button_clone_entity)
 
-        self.pushButton_5 = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton_5.setObjectName("pushButton_5")
-        self.verticalLayout.addWidget(self.pushButton_5)
+        self.button_remove_entity = QtWidgets.QPushButton(self.centralwidget)
+        self.button_remove_entity.setObjectName("button_remove_entity")
+        self.verticalLayout.addWidget(self.button_remove_entity)
 
         self.button_move_entity = QtWidgets.QPushButton(self.centralwidget)
         self.button_move_entity.setObjectName("button_move_entity")
@@ -581,10 +853,6 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.button_zoom_out = QtWidgets.QPushButton(self.centralwidget)
         self.button_zoom_out.setObjectName("button_zoom_out")
         self.gridLayout.addWidget(self.button_zoom_out, 0, 1, 0, 1)
-
-        self.pushButton_3 = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton_3.setObjectName("pushButton_3")
-        self.gridLayout.addWidget(self.pushButton_3, 1, 0, 1, 0)
 
         self.verticalLayout.addLayout(self.gridLayout)
 
@@ -610,9 +878,6 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.label_5 = QtWidgets.QLabel(self.centralwidget)
         self.label_5.setObjectName("label_5")
 
-
-
-
         self.verticalLayout_2.addWidget(self.label_object_id)
         self.verticalLayout_2.addWidget(self.label_position)
         self.verticalLayout_2.addWidget(self.label_model_name)
@@ -622,8 +887,6 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.verticalLayout.addLayout(self.verticalLayout_2)
 
         self.horizontalLayout.addWidget(self.vertLayoutWidget)
-
-        #MainWindow.setLayout(self.horizontalLayout)
 
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 820, 29))
@@ -657,24 +920,20 @@ class EditorMainWindow(QtWidgets.QMainWindow):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))
-        self.pushButton_5.setText(_translate("MainWindow", "Delete Entity"))
+        self.button_remove_entity.setText(_translate("MainWindow", "Delete Entity"))
         self.button_move_entity.setText(_translate("MainWindow", "Move Entity"))
         self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
         self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
 
-        self.pushButton_3.setText(_translate("MainWindow", "Undo"))
         self.label_model_name.setText(_translate("MainWindow", "TextLabel1"))
         self.label_object_id.setText(_translate("MainWindow", "TextLabel2"))
         self.label_position.setText(_translate("MainWindow", "TextLabel3"))
         self.label_4.setText(_translate("MainWindow", "TextLabel4"))
         self.label_5.setText(_translate("MainWindow", "TextLabel5"))
         self.file_menu.setTitle(_translate("MainWindow", "File"))
-        #self.menuLoad_2.setTitle(_translate("MainWindow", "Load"))
 
 if __name__ == "__main__":
     import sys
-
-    from PyQt5.QtWidgets import QMainWindow
 
     app = QtWidgets.QApplication(sys.argv)
 
@@ -682,5 +941,6 @@ if __name__ == "__main__":
     bw_gui = EditorMainWindow()
 
     bw_gui.show()
-
-    sys.exit(app.exec())
+    err_code = app.exec()
+    #traceback.print_exc()
+    sys.exit(err_code)
