@@ -1,4 +1,8 @@
-from lxml import etree
+#from lxml import etree
+try:
+    import xml.etree.cElementTree as etree
+except: # cElementTree not available
+    import xml.etree.ElementTree as etree
 from copy import copy
 
 TEXTURE = "cTextureResource"
