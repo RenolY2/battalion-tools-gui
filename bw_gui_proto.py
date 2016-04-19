@@ -443,32 +443,32 @@ class EditorMainWindow(QtWidgets.QMainWindow):
             obj = self.level.obj_map[currentity]
             xml_node = copy.deepcopy(obj._xml_node)
             try:
-                newid = generate_unique_id(self.level, currentity)
-                xml_node.set("id", newid)
+                cloned_id = generate_unique_id(self.level, currentity)
+                xml_node.set("id", cloned_id)
                 self.level.add_object(xml_node)
 
-                bw_x, bw_y = object_get_position(self.level, newid)
+                bw_x, bw_y = object_get_position(self.level, cloned_id)
                 print("CURRENT_POSITION", bw_x, bw_y)
                 x, y = bw_coords_to_image_coords(bw_x, bw_y)
                 print(bw_x, bw_y, (image_coords_to_bw_coords(x, y)))
 
-                self.add_item_sorted(newid)
+                self.add_item_sorted(cloned_id)
 
-                self.bw_map_screen.add_entity(x, y, newid, obj.type)
+                self.bw_map_screen.add_entity(x, y, cloned_id, obj.type)
 
                 #self.choose_entity(newid)
-                self.bw_map_screen.choose_entity(newid)
-                self.set_entity_text(newid)
-                print("CREATED:", newid)
+                self.bw_map_screen.choose_entity(cloned_id)
+                self.set_entity_text(cloned_id)
+                print("CREATED:", cloned_id)
 
 
-                newobj = self.level.obj_map[newid]
+                clonedobj = self.level.obj_map[cloned_id]
 
-                if newobj.has_attr("mPassenger"):
+                if clonedobj.has_attr("mPassenger"):
                     print("COPYING PASSENGERS")
                     orig_x = bw_x
                     orig_y = bw_y
-                    passengers = newobj.get_attr_elements("mPassenger")
+                    passengers = clonedobj.get_attr_elements("mPassenger")
 
                     passengers_added = []
 
@@ -477,27 +477,28 @@ class EditorMainWindow(QtWidgets.QMainWindow):
                             obj = self.level.obj_map[passenger]
                             xml_node = copy.deepcopy(obj._xml_node)
 
-                            newid = generate_unique_id(self.level, passenger)
-                            xml_node.set("id", newid)
+                            clonedpassenger_id = generate_unique_id(self.level, passenger)
+                            xml_node.set("id", clonedpassenger_id)
                             print("orig passenger: {0}, new passenger: {1}, alreadyexists: {2}".format(
-                                passenger, newid, newid in self.level.obj_map
+                                passenger, clonedpassenger_id, clonedpassenger_id in self.level.obj_map
                             ))
-                            print(type(passenger), type(newid))
+                            print(type(passenger), type(clonedpassenger_id))
 
                             self.level.add_object(xml_node)
                             #x, y = object_get_position(self.level, newid)
                             x = orig_x + (i+1)*8
                             y = orig_y + (i+1)*8
                             print(orig_x, orig_y, x, y)
-                            object_set_position(self.level, newid, x, y)
+                            object_set_position(self.level, clonedpassenger_id, x, y)
                             x, y = bw_coords_to_image_coords(x, y)
 
 
-                            self.add_item_sorted(newid)
+                            self.add_item_sorted(clonedpassenger_id)
                             #item = BWEntityEntry(newid, "{0}[{1}]".format(newid, obj.type))
                             #self.entity_list_widget.addItem(item)
-                            self.bw_map_screen.add_entity(x, y, newid, obj.type)
+                            self.bw_map_screen.add_entity(x, y, clonedpassenger_id, obj.type)
                             passengers_added.append(passenger)
+                            clonedobj.set_attr_value("mPassenger", i, clonedpassenger_id)
                     print("passengers added:", passengers_added)
                     """if len(passengers_added) > 0:
                         QtWidgets.QMessageBox.information(self, "MessageInfo",
