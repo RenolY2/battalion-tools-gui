@@ -498,7 +498,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
                             #self.entity_list_widget.addItem(item)
                             self.bw_map_screen.add_entity(x, y, clonedpassenger_id, obj.type)
                             passengers_added.append(passenger)
-                            clonedobj.set_attr_value("mPassenger", i, clonedpassenger_id)
+                            clonedobj.set_attr_value("mPassenger", clonedpassenger_id, i)
                     print("passengers added:", passengers_added)
                     """if len(passengers_added) > 0:
                         QtWidgets.QMessageBox.information(self, "MessageInfo",
