@@ -8,8 +8,8 @@
 
 import random
 import traceback
-import copy
-import os
+from copy import copy, deepcopy
+from os import path
 from timeit import default_timer
 
 from PyQt5 import Qt, QtCore, QtGui, QtWidgets
@@ -236,7 +236,7 @@ class BWMapViewer(QtWidgets.QWidget):
         assert newid == oldid or newid not in self.entities
 
         if newid != oldid:
-            self.entities[newid] = copy.copy(self.entities[oldid])
+            self.entities[newid] = copy(self.entities[oldid])
             del self.entities[oldid]
         else:
             pass # Don't need to do anything if the old id is the same as the new id
@@ -441,7 +441,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         if currentity is not None:
             obj = self.level.obj_map[currentity]
-            xml_node = copy.deepcopy(obj._xml_node)
+            xml_node = deepcopy(obj._xml_node)
             try:
                 cloned_id = generate_unique_id(self.level, currentity)
                 xml_node.set("id", cloned_id)
@@ -475,7 +475,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
                     for i, passenger in enumerate(passengers):
                         if passenger != "0":
                             obj = self.level.obj_map[passenger]
-                            xml_node = copy.deepcopy(obj._xml_node)
+                            xml_node = deepcopy(obj._xml_node)
 
                             clonedpassenger_id = generate_unique_id(self.level, passenger)
                             xml_node.set("id", clonedpassenger_id)
@@ -606,7 +606,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
                             self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
                         print("ok")
                         self.bw_map_screen.update()
-                        path_parts = os.path.split(filepath)
+                        path_parts = path.split(filepath)
                         self.setWindowTitle("BW-MapEdit - {0}".format(path_parts[-1]))
 
                     except Exception as error:
