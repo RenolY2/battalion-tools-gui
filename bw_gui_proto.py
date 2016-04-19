@@ -252,7 +252,7 @@ class BWMapViewer(QtWidgets.QWidget):
 
     def zoom(self, fac):
 
-        if (self.zoom_factor + fac) > 0.5 and (self.zoom_factor + fac) <= 25:
+        if (self.zoom_factor + fac) > 0.1 and (self.zoom_factor + fac) <= 25:
             self.zoom_factor += fac
             self.zoom_factor = round(self.zoom_factor, 2)
             zf = self.zoom_factor
@@ -593,7 +593,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
                         for obj_id, obj in sorted(self.level.obj_map.items(),
                                                   key=lambda x: get_type(x[1].type)+x[1].type+x[1].id):
-                            print("doing", obj_id)
+                            #print("doing", obj_id)
                             if not obj.has_attr("Mat"):
                                 continue
                             x, y = object_get_position(self.level, obj_id)
@@ -755,9 +755,17 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         horizbar = self.scrollArea.horizontalScrollBar()
         vertbar = self.scrollArea.verticalScrollBar()
 
+        print(horizbar.maximum(), vertbar.maximum())
 
-        widthratio = horizbar.value()/horizbar.maximum()
-        heightratio = vertbar.value()/vertbar.maximum()
+        if horizbar.maximum() > 0:
+            widthratio = horizbar.value()/horizbar.maximum()
+        else:
+            widthratio = 0
+
+        if vertbar.maximum() > 0:
+            heightratio = vertbar.value()/vertbar.maximum()
+        else:
+            heightratio = 0
 
         #oldzf = self.bw_map_screen.zoom_factor / (0.1+1)
         #diff = oldzf - self.bw_map_screen.zoom_factor
@@ -765,26 +773,24 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         self.bw_map_screen.zoom(-0.2)#diff)
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
+        vertbar.maximum()
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
 
         self.bw_map_screen.update()
 
     def zoom_in(self):
-        print("pressed")
-        """itemcount = self.entity_list_widget.count()
-        curr_pos = self.entity_list_widget.currentRow()
-        print(itemcount, curr_poset
-        #self.entity_list_widget.select_item(curr_pos+1 % itemcount)
-        self.entity_list_widget.setCurrentRow((curr_pos+7) % itemcount)"""
-        print("wtf")
         horizbar = self.scrollArea.horizontalScrollBar()
         vertbar = self.scrollArea.verticalScrollBar()
 
-        print("wat")
-        widthratio = horizbar.value()/horizbar.maximum()
-        heightratio = vertbar.value()/vertbar.maximum()
-        print("ok")
-        #zf = self.bw_map_screen.zoom_factor*0.10
+        if horizbar.maximum() > 0:
+            widthratio = horizbar.value()/horizbar.maximum()
+        else:
+            widthratio = 0
+
+        if vertbar.maximum() > 0:
+            heightratio = vertbar.value()/vertbar.maximum()
+        else:
+            heightratio = 0#zf = self.bw_map_screen.zoom_factor*0.10
         self.bw_map_screen.zoom(0.2)#zf)
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
 
