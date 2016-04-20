@@ -6,17 +6,19 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-import random
 import traceback
 from copy import copy, deepcopy
 from os import path
 from timeit import default_timer
 
-from PyQt5 import Qt, QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QColor
-from lib.bw_read_xml import BattWarsLevel
+from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
+from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
+                             QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
+                             QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar)
 
-ENTITY_SIZE = 10
+from lib.bw_read_xml import BattWarsLevel
+from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer
+
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
     "cObjectiveMarkerBase": "mModel",
@@ -28,11 +30,6 @@ MODEL_ATTR = {
     "sPickupBase": "mModel",
 }
 
-COLORS = {
-    "cAirVehicle": "yellow",
-    "cGroundVehicle": "brown",
-    "cTroop": "blue"
-}
 
 
 def bw_coords_to_image_coords(bw_x, bw_y):
@@ -117,30 +114,6 @@ def get_default_path():
 
 
 
-def generate_unique_id(xml, id_base):
-    base_str = str(id_base)
-    prefix = int(base_str[0:2])
-
-    digits = len(base_str)-2
-    rest = int(base_str[2:])
-
-    newid = int(id_base)
-    newid_str = None
-    done = False
-
-    # We keep the first two digits, but choose the remaining digits in such a way that
-    # they are unique.
-    for i in range(10**digits):
-        newid = prefix * (10**digits) + ((rest + 7*i) % (10**digits))
-        newid_str = str(newid)
-
-        if newid_str not in xml.obj_map:
-            break # We made a new unique object id!
-
-    #print("original id:",id_base)
-    #print("new id:", newid_str)
-    return newid_str
-
 def object_get_position(xml, entityid):
     obj = xml.obj_map[entityid]
 
@@ -148,6 +121,7 @@ def object_get_position(xml, entityid):
     x, y = matr4x4[12], matr4x4[14]
 
     return x, y
+
 
 def object_set_position(xml, entityid, x, y):
     obj = xml.obj_map[entityid]
@@ -159,215 +133,6 @@ def object_set_position(xml, entityid, x, y):
     obj.set_attr_value("Mat", ",".join(str(x) for x in matr4x4))
 
 
-
-class BWMapViewer(QtWidgets.QWidget):
-    mouse_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent)
-    entity_clicked = QtCore.pyqtSignal(QtGui.QMouseEvent, str)
-    mouse_dragged = QtCore.pyqtSignal(QtGui.QMouseEvent)
-    mouse_released = QtCore.pyqtSignal(QtGui.QMouseEvent)
-
-    ENTITY_SIZE = ENTITY_SIZE
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.zoom_factor = 1
-
-        self.SIZEX = 2048#1024
-        self.SIZEY = 2048#1024
-
-
-        self.setMinimumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
-        self.setMaximumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
-        self.setObjectName("bw_map_screen")
-
-
-        self.point_x = 0
-        self.point_y = 0
-
-        # This value is used for switching between several entities that overlap.
-        self.next_selected_index = 0
-
-        #self.entities = [(0,0, "abc")]
-        self.entities = {}#{"abc": (0, 0)}
-        self.current_entity = None
-
-    def reset(self):
-        del self.entities
-        self.entities = {}
-        self.current_entity = None
-
-        self.point_x = self.point_y = 0
-
-        self.next_selected_index = 0
-        self.zoom_factor = 1
-
-        self.SIZEX = 2048#1024
-        self.SIZEY = 2048#1024
-
-        self.setMinimumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
-        self.setMaximumSize(QtCore.QSize(self.SIZEX, self.SIZEY))
-
-    def choose_entity(self, entityid):
-        self.current_entity = entityid
-
-        self.update()
-
-    def move_entity(self, entityid, x, y):
-        # Update the position of an entity
-        self.entities[entityid][0] = x
-        self.entities[entityid][1] = y
-
-    def add_entities(self, entities):
-        for x, y, entityid, entitytype in entities:
-            #self.entities.append((x, y, entityid))
-            self.entities[entityid] = [x, y, entitytype]
-
-    def remove_entity(self, entityid):
-        # If the entity is selected, unselect it before deleting it.
-        if self.current_entity is not None:
-            if entityid == self.current_entity:
-                self.current_entity = None
-
-        del self.entities[entityid]
-
-    def rename_entity(self, oldid, newid):
-        # We do not allow renaming an entity to a different name that already exists
-        assert newid == oldid or newid not in self.entities
-
-        if newid != oldid:
-            self.entities[newid] = copy(self.entities[oldid])
-            del self.entities[oldid]
-        else:
-            pass # Don't need to do anything if the old id is the same as the new id
-
-    def add_entity(self, x, y, entityid, entitytype, update=True):
-        #self.entities.append((x, y, random.randint(10, 50)))
-        self.entities[entityid] = [x, y, entitytype]
-
-        # In case lots of entities are added at once, update can be set to False to avoid
-        # redrawing the widget too much.
-        if update:
-            self.update()
-
-    def zoom(self, fac):
-
-        if (self.zoom_factor + fac) > 0.1 and (self.zoom_factor + fac) <= 25:
-            self.zoom_factor += fac
-            self.zoom_factor = round(self.zoom_factor, 2)
-            zf = self.zoom_factor
-            self.setMinimumSize(QtCore.QSize(self.SIZEX*zf, self.SIZEY*zf))
-            self.setMaximumSize(QtCore.QSize(self.SIZEX*zf, self.SIZEY*zf))
-
-    def paintEvent(self, event):
-        start = default_timer()
-
-        p = QtGui.QPainter(self)
-        p.begin(self)
-        h = self.height()
-        w = self.width()
-        p.setBrush(QtGui.QColor("white"))
-        p.drawRect(0, 0, h-1, w-1)
-        if self.zoom_factor > 1:
-            ENTITY_SIZE = int(self.ENTITY_SIZE * (1 + self.zoom_factor/10.0))
-        else:
-            ENTITY_SIZE = self.ENTITY_SIZE
-
-        zf = self.zoom_factor
-        current_entity = self.current_entity
-        last_color = None
-
-        for entity, data in self.entities.items():
-            x, y, entitytype = data
-            x *= zf
-            y *= zf
-
-            if entitytype in COLORS:
-                color = COLORS[entitytype]
-            else:
-                color = "black"
-            if last_color != color:
-                p.setBrush(QColor(color))
-                last_color = color
-            if current_entity != entity:
-                p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
-
-        # Draw the currently selected entity last so it is always above all other entities.
-        if self.current_entity is not None:
-            x, y, entitytype = self.entities[self.current_entity]
-            x *= self.zoom_factor
-            y *= self.zoom_factor
-
-            p.setBrush(QtGui.QColor("red"))
-
-            p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
-
-            p.setBrush(QtGui.QColor("black"))
-
-        p.end()
-        end = default_timer()
-
-        print("time taken:", end-start, "sec")
-
-    def mousePressEvent(self, event):
-        #x,y = event.localPos()
-        #if event.x() < self.height() and event.y() < self.width:
-
-        print(event.x(),event.y())
-        event_x, event_y = event.x(), event.y()
-        hit = False
-        search_start = default_timer()
-
-        if self.zoom_factor > 1:
-            ENTITY_SIZE = int(self.ENTITY_SIZE * (1 + self.zoom_factor/10.0))
-        else:
-            ENTITY_SIZE = self.ENTITY_SIZE
-
-        entities_hit = []
-
-        for entity, data in self.entities.items():
-            x, y, entitytype = data
-            x *= self.zoom_factor
-            y *= self.zoom_factor
-
-            if ((x + ENTITY_SIZE//2) > event_x > (x - ENTITY_SIZE//2)
-                    and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
-                #hit = True
-                entities_hit.append(entity)
-
-        if len(entities_hit) > 0:
-            if self.next_selected_index > (len(entities_hit) - 1):
-                self.next_selected_index = 0
-            entity = entities_hit[self.next_selected_index]
-
-            search_end = default_timer()
-            print("time for search:", search_end-search_start, "sec")
-            self.next_selected_index = (self.next_selected_index+1) % len(entities_hit)
-            self.entity_clicked.emit(event, entity)
-        else:
-            self.mouse_clicked.emit(event)
-
-    def mouseMoveEvent(self, event):
-        self.mouse_dragged.emit(event)
-    def mouseReleaseEvent(self, event):
-        self.mouse_released.emit(event)
-
-class BWEntityEntry(QtWidgets.QListWidgetItem):
-    def __init__(self, xml_ref, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.xml_ref = xml_ref
-
-
-class BWEntityListWidget(QtWidgets.QListWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def select_item(self, pos):
-        #item = self.item(pos)
-        self.setCurrentRow(pos)
-
-
 def get_type(typename):
     if typename in ("cGroundVehicle", "cTroop", "cAirVehicle", "cWaterVehicle"):
         return "a"
@@ -375,7 +140,7 @@ def get_type(typename):
         return "b"
 
 
-class EditorMainWindow(QtWidgets.QMainWindow):
+class EditorMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -443,7 +208,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
             obj = self.level.obj_map[currentity]
             xml_node = deepcopy(obj._xml_node)
             try:
-                cloned_id = generate_unique_id(self.level, currentity)
+                cloned_id = self.level.generate_unique_id(currentity)
                 xml_node.set("id", cloned_id)
                 self.level.add_object(xml_node)
 
@@ -477,7 +242,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
                             obj = self.level.obj_map[passenger]
                             xml_node = deepcopy(obj._xml_node)
 
-                            clonedpassenger_id = generate_unique_id(self.level, passenger)
+                            clonedpassenger_id = self.level.generate_unique_id(passenger)
                             xml_node.set("id", clonedpassenger_id)
                             print("orig passenger: {0}, new passenger: {1}, alreadyexists: {2}".format(
                                 passenger, clonedpassenger_id, clonedpassenger_id in self.level.obj_map
@@ -576,7 +341,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         try:
             print("ok", self.default_path)
             self.xmlPath = ""
-            filepath, choosentype = QtWidgets.QFileDialog.getOpenFileName(
+            filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.default_path,
                 "BW level files (*_level.xml);;All files (*)")
@@ -619,7 +384,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
     def button_save_level(self):
         if self.level is not None:
-            filepath, choosentype = QtWidgets.QFileDialog.getSaveFileName(
+            filepath, choosentype = QFileDialog.getSaveFileName(
                 self, "Save File",
                 self.default_path,
                 "BW level files (*_level.xml);;All files (*)")
@@ -804,19 +569,19 @@ class EditorMainWindow(QtWidgets.QMainWindow):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(820, 760)
-        MainWindow.setMinimumSize(QtCore.QSize(720, 560))
+        MainWindow.setMinimumSize(QSize(720, 560))
         MainWindow.setWindowTitle("BW-MapEdit")
 
 
-        self.centralwidget = QtWidgets.QWidget(MainWindow)
+        self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         MainWindow.setCentralWidget(self.centralwidget)
 
-        self.horizontalLayout = QtWidgets.QHBoxLayout(self.centralwidget)
+        self.horizontalLayout = QHBoxLayout(self.centralwidget)
         self.horizontalLayout.setObjectName("horizontalLayout")
 
 
-        self.scrollArea = QtWidgets.QScrollArea(self.centralwidget)
+        self.scrollArea = QScrollArea(self.centralwidget)
         self.scrollArea.setWidgetResizable(True)
 
         self.bw_map_screen = BWMapViewer(self.centralwidget)
@@ -826,63 +591,63 @@ class EditorMainWindow(QtWidgets.QMainWindow):
         #self.horizontalLayout.addWidget(self.bw_map_screen)
 
         self.entity_list_widget = BWEntityListWidget(self.centralwidget)
-        self.entity_list_widget.setMaximumSize(QtCore.QSize(300, 16777215))
+        self.entity_list_widget.setMaximumSize(QSize(300, 16777215))
         self.entity_list_widget.setObjectName("entity_list_widget")
         self.horizontalLayout.addWidget(self.entity_list_widget)
 
-        spacerItem = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacerItem = QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.horizontalLayout.addItem(spacerItem)
 
-        self.vertLayoutWidget = QtWidgets.QWidget(self.centralwidget)
-        self.vertLayoutWidget.setMaximumSize(QtCore.QSize(200, 600))
-        self.verticalLayout = QtWidgets.QVBoxLayout(self.vertLayoutWidget)
+        self.vertLayoutWidget = QWidget(self.centralwidget)
+        self.vertLayoutWidget.setMaximumSize(QSize(200, 600))
+        self.verticalLayout = QVBoxLayout(self.vertLayoutWidget)
         self.verticalLayout.setObjectName("verticalLayout")
         #self.verticalLayout.
-        self.button_clone_entity = QtWidgets.QPushButton(self.centralwidget)
+        self.button_clone_entity = QPushButton(self.centralwidget)
         self.button_clone_entity.setObjectName("button_clone_entity")
         self.verticalLayout.addWidget(self.button_clone_entity)
 
-        self.button_remove_entity = QtWidgets.QPushButton(self.centralwidget)
+        self.button_remove_entity = QPushButton(self.centralwidget)
         self.button_remove_entity.setObjectName("button_remove_entity")
         self.verticalLayout.addWidget(self.button_remove_entity)
 
-        self.button_move_entity = QtWidgets.QPushButton(self.centralwidget)
+        self.button_move_entity = QPushButton(self.centralwidget)
         self.button_move_entity.setObjectName("button_move_entity")
         self.verticalLayout.addWidget(self.button_move_entity)
 
-        self.gridLayout = QtWidgets.QGridLayout()
+        self.gridLayout = QGridLayout()
         self.gridLayout.setObjectName("gridLayout")
 
-        self.button_zoom_in = QtWidgets.QPushButton(self.centralwidget)
+        self.button_zoom_in = QPushButton(self.centralwidget)
         self.button_zoom_in.setObjectName("button_zoom_in")
         self.gridLayout.addWidget(self.button_zoom_in, 0, 0, 0, 1)
 
-        self.button_zoom_out = QtWidgets.QPushButton(self.centralwidget)
+        self.button_zoom_out = QPushButton(self.centralwidget)
         self.button_zoom_out.setObjectName("button_zoom_out")
         self.gridLayout.addWidget(self.button_zoom_out, 0, 1, 0, 1)
 
         self.verticalLayout.addLayout(self.gridLayout)
 
-        spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem1 = QSpacerItem(10, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.verticalLayout.addItem(spacerItem1)
 
-        self.verticalLayout_2 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_2 = QVBoxLayout()
         self.verticalLayout_2.setObjectName("verticalLayout_2")
 
 
-        self.label_object_id = QtWidgets.QLabel(self.centralwidget)
+        self.label_object_id = QLabel(self.centralwidget)
         self.label_object_id.setObjectName("label_object_id")
 
-        self.label_position = QtWidgets.QLabel(self.centralwidget)
+        self.label_position = QLabel(self.centralwidget)
         self.label_position.setObjectName("label_position")
 
-        self.label_model_name = QtWidgets.QLabel(self.centralwidget)
+        self.label_model_name = QLabel(self.centralwidget)
         self.label_model_name.setObjectName("label_model_name")
 
-        self.label_4 = QtWidgets.QLabel(self.centralwidget)
+        self.label_4 = QLabel(self.centralwidget)
         self.label_4.setObjectName("label_4")
 
-        self.label_5 = QtWidgets.QLabel(self.centralwidget)
+        self.label_5 = QLabel(self.centralwidget)
         self.label_5.setObjectName("label_5")
 
         self.verticalLayout_2.addWidget(self.label_object_id)
@@ -895,37 +660,37 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 
         self.horizontalLayout.addWidget(self.vertLayoutWidget)
 
-        self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 820, 29))
+        self.menubar = QMenuBar(MainWindow)
+        self.menubar.setGeometry(QRect(0, 0, 820, 29))
         self.menubar.setObjectName("menubar")
-        self.file_menu = QtWidgets.QMenu(self.menubar)
+        self.file_menu = QMenu(self.menubar)
         self.file_menu.setObjectName("menuLoad")
 
 
 
-        self.file_load_action = QtWidgets.QAction("Load", self)
+        self.file_load_action = QAction("Load", self)
         self.file_load_action.triggered.connect(self.button_load_level)
         self.file_menu.addAction(self.file_load_action)
-        self.file_save_action = QtWidgets.QAction("Save", self)
+        self.file_save_action = QAction("Save", self)
         self.file_save_action.triggered.connect(self.button_save_level)
         self.file_menu.addAction(self.file_save_action)
 
 
 
-        self.menuLoad_2 = QtWidgets.QMenu(self.menubar)
+        self.menuLoad_2 = QMenu(self.menubar)
         self.menuLoad_2.setObjectName("menuLoad_2")
         MainWindow.setMenuBar(self.menubar)
-        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
         self.menubar.addAction(self.file_menu.menuAction())
         self.menubar.addAction(self.menuLoad_2.menuAction())
 
         self.retranslateUi(MainWindow)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
+        _translate = QCoreApplication.translate
         self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))
         self.button_remove_entity.setText(_translate("MainWindow", "Delete Entity"))
         self.button_move_entity.setText(_translate("MainWindow", "Move Entity"))
@@ -942,7 +707,7 @@ class EditorMainWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     import sys
 
-    app = QtWidgets.QApplication(sys.argv)
+    app = QApplication(sys.argv)
 
 
     bw_gui = EditorMainWindow()
