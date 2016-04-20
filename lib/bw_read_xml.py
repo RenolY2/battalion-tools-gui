@@ -55,6 +55,8 @@ class BattWarsObject(object):
         self._attributes[name][pos].text = val
 
 
+
+
 class BattWarsLevel(object):
     def __init__(self, fileobj):
         self._tree = etree.parse(fileobj)
@@ -113,6 +115,32 @@ class BattWarsLevel(object):
                     return obj
 
             raise RuntimeError("Resource not found: {0}".format(res_name))
+
+
+    def generate_unique_id(self, id_base):
+        base_str = str(id_base)
+        prefix = int(base_str[0:2])
+
+        digits = len(base_str)-2
+        rest = int(base_str[2:])
+
+        newid = int(id_base)
+        newid_str = None
+        done = False
+
+        # We keep the first two digits, but choose the remaining digits in such a way that
+        # they are unique.
+        for i in range(10**digits):
+            newid = prefix * (10**digits) + ((rest + 7*i) % (10**digits))
+            newid_str = str(newid)
+
+            if newid_str not in self.obj_map:
+                break # We made a new unique object id!
+
+        #print("original id:",id_base)
+        #print("new id:", newid_str)
+        return newid_str
+
 
 
 def create_object_hierarchy(id_map):
