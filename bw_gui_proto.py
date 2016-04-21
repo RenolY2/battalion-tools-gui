@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar)
 
 from lib.bw_read_xml import BattWarsLevel
-from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer
+from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow
 
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
@@ -163,20 +163,27 @@ class EditorMainWindow(QMainWindow):
 
         self.resetting = False
 
-        self.entity_list_widget.currentItemChanged.connect(self.change_text)
+        self.entity_list_widget.currentItemChanged.connect(self.action_listwidget_change_selection)
         self.button_zoom_in.pressed.connect(self.zoom_in)
         self.button_zoom_out.pressed.connect(self.zoom_out)
         self.button_remove_entity.pressed.connect(self.remove_position)
         self.button_move_entity.pressed.connect(self.move_entity)
         self.button_clone_entity.pressed.connect(self.action_clone_entity)
+        self.button_show_passengers.pressed.connect(self.action_passenger_window)
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
         self.bw_map_screen.mouse_dragged.connect(self.mouse_move)
         self.bw_map_screen.mouse_released.connect(self.mouse_release)
 
+
         status = self.statusbar
         self.bw_map_screen.setMouseTracking(True)
+
+        self.passenger_window = BWPassengerWindow()
+        self.passenger_window.passengerlist.currentItemChanged.connect(self.passengerwindow_action_choose_entity)
+
+        status.showMessage("Ready")
 
     def reset(self):
         self.resetting = True
@@ -199,6 +206,8 @@ class EditorMainWindow(QMainWindow):
         #self.level = None
         print("list cleared")
         self.bw_map_screen.reset()
+        self.passenger_window.hide()
+        self.passenger_window.reset()
         self.resetting = False
 
     def action_clone_entity(self):
@@ -257,21 +266,11 @@ class EditorMainWindow(QMainWindow):
                             object_set_position(self.level, clonedpassenger_id, x, y)
                             x, y = bw_coords_to_image_coords(x, y)
 
-
                             self.add_item_sorted(clonedpassenger_id)
-                            #item = BWEntityEntry(newid, "{0}[{1}]".format(newid, obj.type))
-                            #self.entity_list_widget.addItem(item)
                             self.bw_map_screen.add_entity(x, y, clonedpassenger_id, obj.type)
                             passengers_added.append(passenger)
                             clonedobj.set_attr_value("mPassenger", clonedpassenger_id, i)
                     print("passengers added:", passengers_added)
-                    """if len(passengers_added) > 0:
-                        QtWidgets.QMessageBox.information(self, "MessageInfo",
-                                                        "The following passengers were added: {0}".format(
-                                                            ", ".join(passengers_added)
-                                                        )
-
-                        )"""
             except:
                 traceback.print_exc()
 
@@ -314,6 +313,49 @@ class EditorMainWindow(QMainWindow):
 
         return None
 
+    def action_passenger_window(self):
+        #if self.passenger_window.isVisible()
+        print("window is visible: ", self.passenger_window.isVisible())
+        #self.passenger_window.reset()
+
+        if not self.passenger_window.isVisible():
+            self.passenger_window.destroy()
+            self.passenger_window = BWPassengerWindow()
+            self.passenger_window.passengerlist.currentItemChanged.connect(self.passengerwindow_action_choose_entity)
+            self.passenger_window.show()
+
+        self.passenger_window.activateWindow()
+        if self.bw_map_screen.current_entity is not None:
+            entityobj = self.level.obj_map[self.bw_map_screen.current_entity]
+            self.passenger_window.set_title(entityobj.id)
+            if entityobj.has_attr("mPassenger"):
+                for i, passenger in enumerate(entityobj.get_attr_elements("mPassenger")):
+                    if passenger in self.level.obj_map:
+                        passengerobj = self.level.obj_map[passenger]
+                        list_item_name = "{0}[{1}]".format(passenger, passengerobj.type)
+                    elif passenger == "0":
+                        list_item_name = "{0}<none>".format(passenger)
+                    else:
+                        list_item_name = "{0}<missing>".format(passenger)
+                    self.passenger_window.add_passenger(list_item_name, passenger)
+            self.passenger_window.update()
+
+    def passengerwindow_action_choose_entity(self, current, previous):
+        try:
+            if current is not None and current.xml_ref in self.level.obj_map:
+                self.set_entity_text(current.xml_ref)
+                self.bw_map_screen.choose_entity(current.xml_ref)
+
+                posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
+                zf = self.bw_map_screen.zoom_factor
+
+                self.scrollArea.ensureVisible(posx*zf, posy*zf,
+                                              xMargin=int(50*zf), yMargin=int(50*zf))
+            elif current is not None:
+                self.statusbar.showMessage("No such entity: {0}".format(current.xml_ref), 1000*2)
+        except:
+            traceback.print_exc()
+
     def move_entity(self):
         if not self.dragging:
             if not self.moving:
@@ -327,15 +369,6 @@ class EditorMainWindow(QMainWindow):
                 currtext = currtext[6:]
                 currtext = currtext.strip("[]")
                 self.button_move_entity.setText(currtext)
-
-
-    """def choose_entity(self, entityid):
-        entityobj = self.level.obj_map[entityid]
-        self.bw_map_screen.choose_entity(entityid)
-
-        self.label_object_id.setText("ID: {0}".format(entityid))
-
-        self.label_object_id.setText("ID: {0}".format(entityid))"""
 
     def button_load_level(self):
         try:
@@ -499,10 +532,9 @@ class EditorMainWindow(QMainWindow):
         except:
             traceback.print_exc()
 
-
-    def change_text(self, current, previous):
+    def action_listwidget_change_selection(self, current, previous):
         #QtWidgets.QListWidgetItem.
-        if not self.resetting:
+        if not self.resetting and current is not None:
             print("ok")
             print("hi", current.text(), current.xml_ref)
 
@@ -512,10 +544,13 @@ class EditorMainWindow(QMainWindow):
             posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
             zf = self.bw_map_screen.zoom_factor
             try:
+                x_margin = min(100, 50*zf)
+                y_margin = min(100, 50*zf)
                 self.scrollArea.ensureVisible(posx*zf, posy*zf,
-                                              xMargin=int(50*zf), yMargin=int(50*zf))
+                                              xMargin=x_margin, yMargin=y_margin)
             except:
                 traceback.print_exc()
+
     def zoom_out(self):
 
         horizbar = self.scrollArea.horizontalScrollBar()
@@ -537,12 +572,13 @@ class EditorMainWindow(QMainWindow):
         #diff = oldzf - self.bw_map_screen.zoom_factor
         #zf = self.bw_map_screen.zoom_factor/1.10
         self.bw_map_screen.zoom(-0.2)#diff)
+        self.bw_map_screen.update()
+
+
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.maximum()
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
-
-        self.bw_map_screen.update()
 
     def zoom_in(self):
         horizbar = self.scrollArea.horizontalScrollBar()
@@ -558,13 +594,13 @@ class EditorMainWindow(QMainWindow):
         else:
             heightratio = 0#zf = self.bw_map_screen.zoom_factor*0.10
         self.bw_map_screen.zoom(0.2)#zf)
+        self.bw_map_screen.update()
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
 
         print("wedidit?")
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
 
-        self.bw_map_screen.update()
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -615,6 +651,11 @@ class EditorMainWindow(QMainWindow):
         self.button_move_entity.setObjectName("button_move_entity")
         self.verticalLayout.addWidget(self.button_move_entity)
 
+        self.button_show_passengers = QPushButton(self.centralwidget)
+        self.button_show_passengers.setObjectName("button_move_entity")
+        self.verticalLayout.addWidget(self.button_show_passengers)
+
+
         self.gridLayout = QGridLayout()
         self.gridLayout.setObjectName("gridLayout")
 
@@ -625,6 +666,7 @@ class EditorMainWindow(QMainWindow):
         self.button_zoom_out = QPushButton(self.centralwidget)
         self.button_zoom_out.setObjectName("button_zoom_out")
         self.gridLayout.addWidget(self.button_zoom_out, 0, 1, 0, 1)
+
 
         self.verticalLayout.addLayout(self.gridLayout)
 
@@ -696,6 +738,7 @@ class EditorMainWindow(QMainWindow):
         self.button_move_entity.setText(_translate("MainWindow", "Move Entity"))
         self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
         self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
+        self.button_show_passengers.setText(_translate("MainWindow", "Show passengers"))
 
         self.label_model_name.setText(_translate("MainWindow", "TextLabel1"))
         self.label_object_id.setText(_translate("MainWindow", "TextLabel2"))
