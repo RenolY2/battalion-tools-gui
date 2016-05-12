@@ -15,6 +15,8 @@ from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar)
+import PyQt5.QtWidgets as QtWidgets
+import PyQt5.QtCore as QtCore
 
 from lib.bw_read_xml import BattWarsLevel
 from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow
@@ -679,6 +681,7 @@ class EditorMainWindow(QMainWindow):
 
         self.label_object_id = QLabel(self.centralwidget)
         self.label_object_id.setObjectName("label_object_id")
+         #TextSelectableByCursor
 
         self.label_position = QLabel(self.centralwidget)
         self.label_position.setObjectName("label_position")
@@ -691,6 +694,9 @@ class EditorMainWindow(QMainWindow):
 
         self.label_5 = QLabel(self.centralwidget)
         self.label_5.setObjectName("label_5")
+
+        for label in (self.label_object_id, self.label_position, self.label_model_name, self.label_4, self.label_5):
+            label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
         self.verticalLayout_2.addWidget(self.label_object_id)
         self.verticalLayout_2.addWidget(self.label_position)
