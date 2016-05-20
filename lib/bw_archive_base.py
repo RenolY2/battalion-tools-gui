@@ -2,8 +2,8 @@ import io
 import struct
 from array import array
 
-from rxet.helper import read_uint32
-
+def read_uint32(fileobj):
+    return struct.unpack("I", fileobj.read(4))[0]
 
 class BWResource(object):
     def __init__(self, name, size, memview):

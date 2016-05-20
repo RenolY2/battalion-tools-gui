@@ -2,8 +2,9 @@
 import io
 import struct
 
-
-from rxet.helper import unpack_uint32
+def unpack_uint32(data, offset):
+    return struct.unpack("I", data[offset:offset+4])[0]
+#from rxet.helper import unpack_uint32
 from .bw_archive_base import BWArchiveBase, BWSection, BWResource
 
 
