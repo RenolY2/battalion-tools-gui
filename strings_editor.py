@@ -146,6 +146,7 @@ class StringsEditorMainWindow(QMainWindow):
                             self.strings_list.addItem(entry)
 
                         pass
+                        self.default_path = filepath
                     except Exception as error:
                         print("error", error)
                         traceback.print_exc()
