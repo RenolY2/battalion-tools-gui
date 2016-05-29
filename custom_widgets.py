@@ -261,7 +261,15 @@ class BWPassengerWindow(QMdiSubWindow):
 
 class BWEntityXMLEditor(QMdiSubWindow):
     def __init__(self, *args, **kwargs):
+        if "windowtype" in kwargs:
+            self.windowname = kwargs["windowtype"]
+            del kwargs["windowtype"]
+        else:
+            self.windowname = "XML Object"
+
         super().__init__(*args, **kwargs)
+
+
 
         self.resize(900, 500)
         self.setMinimumSize(QSize(300, 300))
@@ -289,7 +297,7 @@ class BWEntityXMLEditor(QMdiSubWindow):
 
         self.verticalLayout.addWidget(self.textbox_xml)
         self.verticalLayout.addWidget(self.button_xml_savetext)
-        self.setWindowTitle("hi")
+        self.setWindowTitle(self.windowname)
 
     def set_content(self, xmlnode):
         try:
@@ -308,4 +316,7 @@ class BWEntityXMLEditor(QMdiSubWindow):
             traceback.print_exc()
 
     def set_title(self, objectname):
-        self.setWindowTitle("XML object - {0}".format(objectname))
+        self.setWindowTitle("{0} - {1}".format(self.windowname, objectname))
+
+    def reset(self):
+        pass
