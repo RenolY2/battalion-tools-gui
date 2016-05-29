@@ -173,6 +173,7 @@ class EditorMainWindow(QMainWindow):
         self.button_clone_entity.pressed.connect(self.action_clone_entity)
         self.button_show_passengers.pressed.connect(self.action_passenger_window)
         self.button_edit_xml.pressed.connect(self.action_open_xml_editor)
+        self.button_edit_base_xml.pressed.connect(self.action_open_basexml_editor)
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
@@ -188,6 +189,10 @@ class EditorMainWindow(QMainWindow):
 
         self.xmlobject_textbox = BWEntityXMLEditor()
         self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
+
+        self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
+        self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
+
         status.showMessage("Ready")
 
     def reset(self):
@@ -206,11 +211,52 @@ class EditorMainWindow(QMainWindow):
         self.entity_list_widget.clear()
 
         self.bw_map_screen.reset()
-        self.passenger_window.hide()
-        self.passenger_window.reset()
+
+        for window in (self.passenger_window, self.xmlobject_textbox, self.basexmlobject_textbox):
+            window.close()
+            window.reset()
+
         self.resetting = False
 
         print("reset done")
+
+    def action_open_basexml_editor(self):
+        if not self.basexmlobject_textbox.isVisible():
+            self.basexmlobject_textbox.destroy()
+            self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
+            self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
+            self.basexmlobject_textbox.show()
+
+        self.basexmlobject_textbox.activateWindow()
+        if self.level is not None and self.bw_map_screen.current_entity is not None:
+            obj = self.level.obj_map[self.bw_map_screen.current_entity]
+            if not obj.has_attr("mBase"):
+                pass
+            else:
+                baseobj = self.level.obj_map[obj.get_attr_value("mBase")]
+                self.basexmlobject_textbox.set_title(baseobj.id)
+
+                self.basexmlobject_textbox.set_content(baseobj._xml_node)
+
+                self.basexmlobject_textbox.update()
+                #self.xmlobject_textbox.show()
+
+    def xmleditor_action_save_base_object_xml(self):
+        self.statusbar.showMessage("Saving base object changes...")
+        try:
+            xmlnode = self.basexmlobject_textbox.get_content()
+            #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
+            assert self.basexmlobject_textbox.entity == xmlnode.get("id") or xmlnode.get(id) not in self.level.obj_map
+
+            del self.level.obj_map[xmlnode.get("id")]
+            self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
+
+            self.statusbar.showMessage("Saved base object {0} as {1}".format(
+                self.basexmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
+
+        except:
+            self.statusbar.showMessage("Saving base object failed")
+            traceback.print_exc()
 
     def action_open_xml_editor(self):
         if not self.xmlobject_textbox.isVisible():
@@ -723,12 +769,12 @@ class EditorMainWindow(QMainWindow):
         self.button_edit_xml = QPushButton(self.centralwidget)
         self.button_edit_xml.setObjectName("button_edit_xml")
 
-        #self.button_edit_base_xml = QPushButton(self.centralwidget)
-        #self.button_edit_base_xml.setObjectName("button_edit_base_xml")
+        self.button_edit_base_xml = QPushButton(self.centralwidget)
+        self.button_edit_base_xml.setObjectName("button_edit_base_xml")
 
         self.verticalLayout.addLayout(self.gridLayout)
         self.verticalLayout.addWidget(self.button_edit_xml)
-        #self.verticalLayout.addWidget(self.button_edit_base_xml)
+        self.verticalLayout.addWidget(self.button_edit_base_xml)
 
         spacerItem1 = QSpacerItem(10, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.verticalLayout.addItem(spacerItem1)
@@ -803,7 +849,8 @@ class EditorMainWindow(QMainWindow):
         self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
         self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
         self.button_show_passengers.setText(_translate("MainWindow", "Show passengers"))
-        self.button_edit_xml.setText("Edit Object as XML")
+        self.button_edit_xml.setText("Edit Object XML")
+        self.button_edit_base_xml.setText("Edit Base Object XML")
 
         self.label_model_name.setText(_translate("MainWindow", "TextLabel1"))
         self.label_object_id.setText(_translate("MainWindow", "TextLabel2"))
