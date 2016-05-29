@@ -18,8 +18,8 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
-from lib.bw_read_xml import BattWarsLevel
-from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow
+from lib.bw_read_xml import BattWarsLevel, BattWarsObject
+from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor
 
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
@@ -172,6 +172,7 @@ class EditorMainWindow(QMainWindow):
         self.button_move_entity.pressed.connect(self.move_entity)
         self.button_clone_entity.pressed.connect(self.action_clone_entity)
         self.button_show_passengers.pressed.connect(self.action_passenger_window)
+        self.button_edit_xml.pressed.connect(self.action_open_xml_editor)
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
@@ -185,6 +186,8 @@ class EditorMainWindow(QMainWindow):
         self.passenger_window = BWPassengerWindow()
         self.passenger_window.passengerlist.currentItemChanged.connect(self.passengerwindow_action_choose_entity)
 
+        self.xmlobject_textbox = BWEntityXMLEditor()
+        self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
         status.showMessage("Ready")
 
     def reset(self):
@@ -192,25 +195,72 @@ class EditorMainWindow(QMainWindow):
         self.statusbar.clearMessage()
         self.dragged_time = None
         self.moving = False
-        #self.default_path = ""
-        print("so far so well")
         self.dragging = False
         self.last_x = None
         self.last_y = None
         self.dragged_time = None
 
         self.moving = False
-        print("good")
 
         self.entity_list_widget.clearSelection()
         self.entity_list_widget.clear()
-        #del self.level
-        #self.level = None
-        print("list cleared")
+
         self.bw_map_screen.reset()
         self.passenger_window.hide()
         self.passenger_window.reset()
         self.resetting = False
+
+        print("reset done")
+
+    def action_open_xml_editor(self):
+        if not self.xmlobject_textbox.isVisible():
+            self.xmlobject_textbox.destroy()
+            self.xmlobject_textbox = BWEntityXMLEditor()
+            self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
+            self.xmlobject_textbox.show()
+
+        self.xmlobject_textbox.activateWindow()
+        if self.level is not None and self.bw_map_screen.current_entity is not None:
+            entityobj = self.level.obj_map[self.bw_map_screen.current_entity]
+            self.xmlobject_textbox.set_title(entityobj.id)
+
+            self.xmlobject_textbox.set_content(entityobj._xml_node)
+
+            self.xmlobject_textbox.update()
+        #self.xmlobject_textbox.show()
+
+    def xmleditor_action_save_object_xml(self):
+        self.statusbar.showMessage("Saving object changes...")
+        try:
+            xmlnode = self.xmlobject_textbox.get_content()
+            #assert self.bw_map_screen.current_entity == self.xmlobject_textbox.entity
+            assert self.xmlobject_textbox.entity == xmlnode.get("id") or xmlnode.get(id) not in self.level.obj_map
+
+            if self.passenger_window.isVisible():
+                self.passenger_window.close()
+
+            if self.xmlobject_textbox.entity != xmlnode.get("id"):
+                #obj = self.level.obj_map[xmlnode.get("id")]
+                self.level.remove_object(self.xmlobject_textbox.entity)
+                self.level.add_object(xmlnode)
+
+                pos = self.get_entity_item_pos(self.xmlobject_textbox.entity)
+                item = self.entity_list_widget.takeItem(pos)
+                self.entity_list_widget.removeItemWidget(item)
+                self.add_item_sorted(xmlnode.get("id"))
+
+                self.bw_map_screen.rename_entity(self.xmlobject_textbox.entity, xmlnode.get(id))
+                assert xmlnode.get("id") in self.level.obj_map
+            else:
+                del self.level.obj_map[xmlnode.get("id")]
+                self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
+
+            self.statusbar.showMessage("Saved object {0} as {1}".format(
+                self.xmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
+
+        except:
+            self.statusbar.showMessage("Saving object failed")
+            traceback.print_exc()
 
     def action_clone_entity(self):
         currentity = self.bw_map_screen.current_entity
@@ -328,6 +378,7 @@ class EditorMainWindow(QMainWindow):
 
         self.passenger_window.activateWindow()
         if self.bw_map_screen.current_entity is not None:
+            self.passenger_window.reset()
             entityobj = self.level.obj_map[self.bw_map_screen.current_entity]
             self.passenger_window.set_title(entityobj.id)
             if entityobj.has_attr("mPassenger"):
@@ -669,8 +720,15 @@ class EditorMainWindow(QMainWindow):
         self.button_zoom_out.setObjectName("button_zoom_out")
         self.gridLayout.addWidget(self.button_zoom_out, 0, 1, 0, 1)
 
+        self.button_edit_xml = QPushButton(self.centralwidget)
+        self.button_edit_xml.setObjectName("button_edit_xml")
+
+        #self.button_edit_base_xml = QPushButton(self.centralwidget)
+        #self.button_edit_base_xml.setObjectName("button_edit_base_xml")
 
         self.verticalLayout.addLayout(self.gridLayout)
+        self.verticalLayout.addWidget(self.button_edit_xml)
+        #self.verticalLayout.addWidget(self.button_edit_base_xml)
 
         spacerItem1 = QSpacerItem(10, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.verticalLayout.addItem(spacerItem1)
@@ -745,6 +803,7 @@ class EditorMainWindow(QMainWindow):
         self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
         self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
         self.button_show_passengers.setText(_translate("MainWindow", "Show passengers"))
+        self.button_edit_xml.setText("Edit Object as XML")
 
         self.label_model_name.setText(_translate("MainWindow", "TextLabel1"))
         self.label_object_id.setText(_translate("MainWindow", "TextLabel2"))

@@ -1,11 +1,13 @@
-
+import traceback
 from timeit import default_timer
 from copy import copy
+import xml.etree.ElementTree as etree
 
-from PyQt5.QtGui import QMouseEvent, QPainter, QColor
+from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog,
-                            QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton)
+                            QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
 from PyQt5.QtCore import QSize, pyqtSignal
+from PyQt5.QtCore import Qt
 
 
 ENTITY_SIZE = 10
@@ -93,8 +95,12 @@ class BWMapViewer(QWidget):
         assert newid == oldid or newid not in self.entities
 
         if newid != oldid:
+
             self.entities[newid] = copy(self.entities[oldid])
+            if self.current_entity == oldid:
+                self.current_entity = newid
             del self.entities[oldid]
+            self.update()
         else:
             pass # Don't need to do anything if the old id is the same as the new id
 
@@ -231,6 +237,7 @@ class BWPassengerWindow(QMdiSubWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setBaseSize(400, 400)
+
         self.centralwidget = QWidget(self)
         self.setWidget(self.centralwidget)
 
@@ -250,3 +257,55 @@ class BWPassengerWindow(QMdiSubWindow):
 
     def set_title(self, entityname):
         self.setWindowTitle("Passengers - {0}".format(entityname))
+
+
+class BWEntityXMLEditor(QMdiSubWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.resize(900, 500)
+        self.setMinimumSize(QSize(300, 300))
+
+        self.centralwidget = QWidget(self)
+        self.setWidget(self.centralwidget)
+        self.entity = None
+
+        font = QFont()
+        font.setFamily("Consolas")
+        font.setStyleHint(QFont.Monospace)
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+
+        self.verticalLayout = QVBoxLayout(self.centralwidget)
+        self.textbox_xml = QTextEdit(self.centralwidget)
+        self.button_xml_savetext = QPushButton(self.centralwidget)
+        self.button_xml_savetext.setText("Save XML")
+        self.button_xml_savetext.setMaximumWidth(400)
+        self.textbox_xml.setLineWrapMode(QTextEdit.NoWrap)
+
+        metrics = QFontMetrics(font)
+        self.textbox_xml.setTabStopWidth(4 * metrics.width(' '))
+        self.textbox_xml.setFont(font)
+
+        self.verticalLayout.addWidget(self.textbox_xml)
+        self.verticalLayout.addWidget(self.button_xml_savetext)
+        self.setWindowTitle("hi")
+
+    def set_content(self, xmlnode):
+        try:
+            self.textbox_xml.setText(etree.tostring(xmlnode, encoding="unicode"))
+            self.entity = xmlnode.get("id")
+        except:
+            traceback.print_exc()
+
+    def get_content(self):
+        try:
+            content = self.textbox_xml.toPlainText()
+            xmlnode = etree.fromstring(content)
+
+            return xmlnode
+        except:
+            traceback.print_exc()
+
+    def set_title(self, objectname):
+        self.setWindowTitle("XML object - {0}".format(objectname))
