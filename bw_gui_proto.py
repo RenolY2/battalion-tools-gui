@@ -8,6 +8,7 @@
 
 import traceback
 from copy import copy, deepcopy
+import os
 from os import path
 from timeit import default_timer
 
@@ -246,7 +247,7 @@ class EditorMainWindow(QMainWindow):
         try:
             xmlnode = self.basexmlobject_textbox.get_content()
             #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
-            assert self.basexmlobject_textbox.entity == xmlnode.get("id") or xmlnode.get(id) not in self.level.obj_map
+            assert self.basexmlobject_textbox.entity == xmlnode.get("id")  # Disallow changing the id of the base object
 
             del self.level.obj_map[xmlnode.get("id")]
             self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
@@ -280,7 +281,7 @@ class EditorMainWindow(QMainWindow):
         try:
             xmlnode = self.xmlobject_textbox.get_content()
             #assert self.bw_map_screen.current_entity == self.xmlobject_textbox.entity
-            assert self.xmlobject_textbox.entity == xmlnode.get("id") or xmlnode.get(id) not in self.level.obj_map
+            assert self.xmlobject_textbox.entity == xmlnode.get("id") or xmlnode.get("id") not in self.level.obj_map
 
             if self.passenger_window.isVisible():
                 self.passenger_window.close()
@@ -288,6 +289,7 @@ class EditorMainWindow(QMainWindow):
             if self.xmlobject_textbox.entity != xmlnode.get("id"):
                 #obj = self.level.obj_map[xmlnode.get("id")]
                 self.level.remove_object(self.xmlobject_textbox.entity)
+                print("adding", xmlnode.get("id"), xmlnode.get("id") in self.level.obj_map )
                 self.level.add_object(xmlnode)
 
                 pos = self.get_entity_item_pos(self.xmlobject_textbox.entity)
@@ -295,8 +297,10 @@ class EditorMainWindow(QMainWindow):
                 self.entity_list_widget.removeItemWidget(item)
                 self.add_item_sorted(xmlnode.get("id"))
 
-                self.bw_map_screen.rename_entity(self.xmlobject_textbox.entity, xmlnode.get(id))
+                self.bw_map_screen.rename_entity(self.xmlobject_textbox.entity, xmlnode.get("id"))
                 assert xmlnode.get("id") in self.level.obj_map
+                self.xmlobject_textbox.entity = xmlnode.get("id")
+                self.xmlobject_textbox.set_title(xmlnode.get("id"))
             else:
                 del self.level.obj_map[xmlnode.get("id")]
                 self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
