@@ -279,12 +279,13 @@ class BWMapViewer(QWidget):
             ENTITY_SIZE = self.ENTITY_SIZE
 
         entities_hit = []
-
+        toggle = self.visibility_toggle
         for entity, data in self.entities.items():
             x, y, entitytype, metadata = data
             x *= self.zoom_factor
             y *= self.zoom_factor
-
+            if entitytype in toggle and toggle[entitytype] is False:
+                continue
             if ((x + ENTITY_SIZE//2) > event_x > (x - ENTITY_SIZE//2)
                 and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
                 #hit = True
