@@ -20,7 +20,7 @@ import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
 from lib.bw_read_xml import BattWarsLevel, BattWarsObject
-from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor
+from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor, MenuDontClose
 
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
@@ -212,6 +212,8 @@ class EditorMainWindow(QMainWindow):
         self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
         self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
 
+        self.types_visible = {}
+
         status.showMessage("Ready")
 
     def reset(self):
@@ -230,6 +232,7 @@ class EditorMainWindow(QMainWindow):
         self.entity_list_widget.clear()
 
         self.bw_map_screen.reset()
+        self.clear_visibility_toggles()
 
         for window in (self.passenger_window, self.xmlobject_textbox, self.basexmlobject_textbox):
             window.close()
@@ -514,6 +517,8 @@ class EditorMainWindow(QMainWindow):
                         self.level = BattWarsLevel(f)
                         self.default_path = filepath
                         set_default_path(filepath)
+
+                        self.setup_visibility_toggles()
 
                         for obj_id, obj in sorted(self.level.obj_map.items(),
                                                   key=lambda x: get_type(x[1].type)+x[1].type+x[1].id):
@@ -858,6 +863,9 @@ class EditorMainWindow(QMainWindow):
         self.file_menu.setObjectName("menuLoad")
 
 
+        self.visibility_menu = MenuDontClose(self.menubar)#QMenu(self.menubar)
+        self.visibility_menu.setObjectName("visibility")
+
 
         self.file_load_action = QAction("Load", self)
         self.file_load_action.triggered.connect(self.button_load_level)
@@ -866,19 +874,70 @@ class EditorMainWindow(QMainWindow):
         self.file_save_action.triggered.connect(self.button_save_level)
         self.file_menu.addAction(self.file_save_action)
 
+        #self.visibility_menu.addAction(self.toggle_action)
+        self.visibility_actions = []
 
-
-        self.menuLoad_2 = QMenu(self.menubar)
-        self.menuLoad_2.setObjectName("menuLoad_2")
+        #self.menuLoad_2 = QMenu(self.menubar)
+        #self.menuLoad_2.setObjectName("menuLoad_2")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
         self.menubar.addAction(self.file_menu.menuAction())
-        self.menubar.addAction(self.menuLoad_2.menuAction())
-
+        #self.menubar.addAction(self.menuLoad_2.menuAction())
+        self.menubar.addAction(self.visibility_menu.menuAction())
         self.retranslateUi(MainWindow)
         QMetaObject.connectSlotsByName(MainWindow)
+
+    def make_function(self, objtype):
+        def toggle(toggled):
+            my_type = copy(objtype)
+            self.types_visible[my_type] = toggled
+            self.bw_map_screen.set_visibility(self.types_visible)
+            self.bw_map_screen.update()
+        return toggle
+
+    def setup_visibility_toggles(self):
+
+        for objtype in sorted(self.level.objtypes_with_positions):
+
+            toggle = self.make_function(objtype)
+
+
+            toggle_action = QAction(copy(objtype), self)
+            toggle_action.setCheckable(True)
+            toggle_action.setChecked(True)
+            toggle_action.triggered.connect(toggle)
+            self.types_visible[objtype] = True
+
+            self.visibility_menu.addAction(toggle_action)
+            self.visibility_actions.append((toggle_action, toggle))
+
+        toggle_all = QAction("Toggle All", self)
+        toggle_all.triggered.connect(self.toggle_visiblity_all)
+
+        self.visibility_menu.addAction(toggle_all)
+        self.visibility_actions.append((toggle_all, self.toggle_visiblity_all))
+
+    def toggle_visiblity_all(self):
+        try:
+            for action, func in self.visibility_actions:
+                if action.isCheckable():
+                    objtype = action.text()
+                    toggle = self.types_visible[objtype]
+                    self.types_visible[objtype] = not toggle
+                    action.setChecked(not toggle)
+
+            self.bw_map_screen.update()
+        except:
+            traceback.print_exc()
+
+    def clear_visibility_toggles(self):
+        for action, func in self.visibility_actions:
+            self.visibility_menu.removeAction(action)
+            action.destroy()
+        self.visibility_actions = []
+        self.types_visible = {}
 
     def retranslateUi(self, MainWindow):
         _translate = QCoreApplication.translate
@@ -897,6 +956,7 @@ class EditorMainWindow(QMainWindow):
         self.label_4.setText(_translate("MainWindow", "TextLabel4"))
         self.label_5.setText(_translate("MainWindow", "TextLabel5"))
         self.file_menu.setTitle(_translate("MainWindow", "File"))
+        self.visibility_menu.setTitle(_translate("MainWindow", "Visibility"))
 
 if __name__ == "__main__":
     import sys

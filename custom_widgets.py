@@ -5,7 +5,7 @@ from copy import copy
 import xml.etree.ElementTree as etree
 
 from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon
-from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog,
+from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
                             QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
 from PyQt5.QtCore import QSize, pyqtSignal, QPoint
 from PyQt5.QtCore import Qt
@@ -57,6 +57,10 @@ class BWMapViewer(QWidget):
         #self.entities = [(0,0, "abc")]
         self.entities = {}#{"abc": (0, 0)}
         self.current_entity = None
+        self.visibility_toggle = {}
+
+    def set_visibility(self, visibility):
+        self.visibility_toggle = visibility
 
     def reset(self):
         del self.entities
@@ -189,10 +193,14 @@ class BWMapViewer(QWidget):
         drawbox = self.draw_box
         drawentity = self.draw_entity
         polycache = self.polygon_cache
+        toggle = self.visibility_toggle
         for entity, data in self.entities.items():
             x, y, entitytype, metadata = data
             x *= zf
             y *= zf
+
+            if entitytype in toggle and toggle[entitytype] is False:
+                continue
 
             if entitytype in COLORS:
                 color = COLORS[entitytype]
@@ -297,6 +305,16 @@ class BWMapViewer(QWidget):
     def mouseReleaseEvent(self, event):
         self.mouse_released.emit(event)
 
+class MenuDontClose(QMenu):
+    def mouseReleaseEvent(self, e):
+        try:
+            action = self.activeAction()
+            if action and action.isEnabled():
+                action.trigger()
+            else:
+                QMenu.mouseReleaseEvent(self, e)
+        except:
+            traceback.print_exc()
 
 class BWEntityEntry(QListWidgetItem):
     def __init__(self, xml_ref, *args, **kwargs):
