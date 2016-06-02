@@ -33,7 +33,23 @@ MODEL_ATTR = {
     "sPickupBase": "mModel",
 }
 
+def update_mapscreen(mapscreen, obj):
+    if obj.type != "cMapZone":
+        return
 
+    width, height, length, unk = [x for x in map(float, obj.get_attr_value("mSize").split(","))]
+    radius = float(obj.get_attr_value("mRadius"))
+    mapscreen.set_metadata(obj.id,
+                            {"width": width, "length": length,
+                             "radius": radius, "zonetype": obj.get_attr_value("mZoneType")})
+
+def get_position_attribute(obj):
+    if obj.has_attr("Mat"):
+        return "Mat"
+    if obj.type == "cMapZone":
+        return "mMatrix"
+
+    return None
 
 def bw_coords_to_image_coords(bw_x, bw_y):
     img_x = ((bw_x + (4096//2)) // 2)
@@ -119,8 +135,9 @@ def get_default_path():
 
 def object_get_position(xml, entityid):
     obj = xml.obj_map[entityid]
+    matrix_name = get_position_attribute(obj)
 
-    matr4x4 = [float(x) for x in obj.get_attr_value("Mat").split(",")]
+    matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
     x, y = matr4x4[12], matr4x4[14]
 
     return x, y
@@ -128,12 +145,13 @@ def object_get_position(xml, entityid):
 
 def object_set_position(xml, entityid, x, y):
     obj = xml.obj_map[entityid]
+    matrix_name = get_position_attribute(obj)
 
-    matr4x4 = [float(x) for x in obj.get_attr_value("Mat").split(",")]
+    matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
     matr4x4[12] = x
     matr4x4[14] = y
 
-    obj.set_attr_value("Mat", ",".join(str(x) for x in matr4x4))
+    obj.set_attr_value(matrix_name, ",".join(str(x) for x in matr4x4))
 
 
 def get_type(typename):
@@ -301,12 +319,16 @@ class EditorMainWindow(QMainWindow):
                 assert xmlnode.get("id") in self.level.obj_map
                 self.xmlobject_textbox.entity = xmlnode.get("id")
                 self.xmlobject_textbox.set_title(xmlnode.get("id"))
+
             else:
                 del self.level.obj_map[xmlnode.get("id")]
                 self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
 
+            update_mapscreen(self.bw_map_screen, self.level.obj_map[xmlnode.get("id")])
+
             self.statusbar.showMessage("Saved object {0} as {1}".format(
                 self.xmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
+            self.bw_map_screen.update()
 
         except:
             self.statusbar.showMessage("Saving object failed")
@@ -496,15 +518,21 @@ class EditorMainWindow(QMainWindow):
                         for obj_id, obj in sorted(self.level.obj_map.items(),
                                                   key=lambda x: get_type(x[1].type)+x[1].type+x[1].id):
                             #print("doing", obj_id)
-                            if not obj.has_attr("Mat"):
+                            if get_position_attribute(obj) is None:
                                 continue
+                            #if not obj.has_attr("Mat"):
+                            #    continue
                             x, y = object_get_position(self.level, obj_id)
+                            assert type(x) != str
                             x, y = bw_coords_to_image_coords(x, y)
 
                             item = BWEntityEntry(obj_id, "{0}[{1}]".format(obj_id, obj.type))
                             self.entity_list_widget.addItem(item)
 
                             self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
+                            if obj.type == "cMapZone":
+                                update_mapscreen(self.bw_map_screen, obj)
+
                         print("ok")
                         self.bw_map_screen.update()
                         path_parts = path.split(filepath)
@@ -534,17 +562,23 @@ class EditorMainWindow(QMainWindow):
             pass # no level loaded, do nothing
 
     def entity_position(self, event, entity):
-        print("got entity:",entity, self.bw_map_screen.entities[entity][2])
-        print(entity_get_model(self.level, entity))
-        self.set_entity_text(entity)
-        self.bw_map_screen.choose_entity(entity)
-        pos = self.get_entity_item_pos(entity)
-        print("searching:",pos)
         try:
-            self.entity_list_widget.select_item(pos)
+            print("got entity:",entity, self.bw_map_screen.entities[entity][2])
+            print(entity_get_model(self.level, entity))
+            self.set_entity_text(entity)
+            self.bw_map_screen.choose_entity(entity)
+            pos = self.get_entity_item_pos(entity)
+            print("searching:",pos)
+            try:
+                self.entity_list_widget.select_item(pos)
+            except:
+                traceback.print_exc()
+            try:
+                self.bw_map_screen.update()
+            except:
+                traceback.print_exc()
         except:
             traceback.print_exc()
-        self.bw_map_screen.update()
 
     def remove_position(self):
         #self.bw_map_screen.entities.pop()
@@ -584,6 +618,7 @@ class EditorMainWindow(QMainWindow):
                                                x, y)
                 self.set_entity_text(self.bw_map_screen.current_entity)
 
+                update_mapscreen(self.bw_map_screen, self.level.obj_map[self.bw_map_screen.current_entity])
                 print("New position:", object_get_position(self.level, self.bw_map_screen.current_entity))
 
 
@@ -597,7 +632,7 @@ class EditorMainWindow(QMainWindow):
         if self.dragging and default_timer() - self.dragged_time > 0.1:
             delta_x = (event.x()-self.last_x)/8
             delta_y = (event.y()-self.last_y)/8
-            print("hi",event.x(), event.y())
+            #print("hi",event.x(), event.y())
 
             vertbar = self.scrollArea.verticalScrollBar()
             horizbar = self.scrollArea.horizontalScrollBar()
@@ -644,7 +679,7 @@ class EditorMainWindow(QMainWindow):
             self.set_entity_text(current.xml_ref)
             self.bw_map_screen.choose_entity(current.xml_ref)
 
-            posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
+            posx, posy, typename, metadata = self.bw_map_screen.entities[current.xml_ref]
             zf = self.bw_map_screen.zoom_factor
             try:
                 x_margin = min(100, 50*zf)

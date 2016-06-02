@@ -1,12 +1,13 @@
 import traceback
+import math
 from timeit import default_timer
 from copy import copy
 import xml.etree.ElementTree as etree
 
-from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics
+from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog,
                             QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
-from PyQt5.QtCore import QSize, pyqtSignal
+from PyQt5.QtCore import QSize, pyqtSignal, QPoint
 from PyQt5.QtCore import Qt
 
 
@@ -15,7 +16,12 @@ ENTITY_SIZE = 10
 COLORS = {
     "cAirVehicle": "yellow",
     "cGroundVehicle": "brown",
-    "cTroop": "blue"
+    "cTroop": "blue",
+    "cMapZone": "grey"
+}
+
+MAPZONECOLORS = {
+    "ZONETYPE_MISSIONBOUNDARY": "light green"
 }
 
 
@@ -30,7 +36,7 @@ class BWMapViewer(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.zoom_factor = 1
+        self._zoom_factor = 10
 
         self.SIZEX = 2048#1024
         self.SIZEY = 2048#1024
@@ -43,6 +49,7 @@ class BWMapViewer(QWidget):
 
         self.point_x = 0
         self.point_y = 0
+        self.polygon_cache = {}
 
         # This value is used for switching between several entities that overlap.
         self.next_selected_index = 0
@@ -59,13 +66,19 @@ class BWMapViewer(QWidget):
         self.point_x = self.point_y = 0
 
         self.next_selected_index = 0
-        self.zoom_factor = 1
+        self._zoom_factor = 10
+        del self.polygon_cache
+        self.polygon_cache = {}
 
         self.SIZEX = 2048#1024
         self.SIZEY = 2048#1024
 
         self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
         self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
+
+    @property
+    def zoom_factor(self):
+        return self._zoom_factor/10.0
 
     def choose_entity(self, entityid):
         self.current_entity = entityid
@@ -80,7 +93,7 @@ class BWMapViewer(QWidget):
     def add_entities(self, entities):
         for x, y, entityid, entitytype in entities:
             #self.entities.append((x, y, entityid))
-            self.entities[entityid] = [x, y, entitytype]
+            self.entities[entityid] = [x, y, entitytype, None]
 
     def remove_entity(self, entityid):
         # If the entity is selected, unselect it before deleting it.
@@ -104,9 +117,9 @@ class BWMapViewer(QWidget):
         else:
             pass # Don't need to do anything if the old id is the same as the new id
 
-    def add_entity(self, x, y, entityid, entitytype, update=True):
+    def add_entity(self, x, y, entityid, entitytype, update=True, metadata=None):
         #self.entities.append((x, y, random.randint(10, 50)))
-        self.entities[entityid] = [x, y, entitytype]
+        self.entities[entityid] = [x, y, entitytype, metadata]
 
         # In case lots of entities are added at once, update can be set to False to avoid
         # redrawing the widget too much.
@@ -114,16 +127,48 @@ class BWMapViewer(QWidget):
             self.update()
 
     def zoom(self, fac):
-
         if (self.zoom_factor + fac) > 0.1 and (self.zoom_factor + fac) <= 25:
-            self.zoom_factor += fac
+            self._zoom_factor += int(fac*10)
             #self.zoom_factor = round(self.zoom_factor, 2)
             zf = self.zoom_factor
             self.setMinimumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
             self.setMaximumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
 
+    def draw_entity(self, painter, x, y, size, zf, entityid, metadata):
+        #print(x,y,size, type(x), type(y), type(size), metadata)
+        painter.drawRect(x-size//2, y-size//2, size, size)
+
+    def draw_box(self, painter, x, y, size, zf, entityid, metadata, polycache):
+        #painter.drawRect(x-size//2, y-size//2, size, size)
+        if metadata is not None:
+            width = metadata["width"]*zf
+            length = metadata["length"]*zf
+            #print("drawing")
+
+            if entityid not in polycache or width != polycache[entityid][1] or length != polycache[entityid][2]:
+                polygon = QPolygon([QPoint(x-width//2, y-length//2), QPoint(x-width//2, y+length//2),
+                                    QPoint(x+width//2, y+length//2), QPoint(x+width//2, y-length//2),
+                                    QPoint(x-width//2, y-length//2)])
+                polycache[entityid] = [polygon, width, length]
+                pass
+            else:
+                pass
+                polygon = polycache[entityid][0]
+
+            #painter.rotate(45)
+            radius = metadata["radius"]*zf
+            if radius != 0.0:
+                painter.drawArc(x-radius//2, y-radius//2, radius, radius, 0, 16*360)
+            painter.drawPolyline(polygon)
+
+            #painter.rotate(-45)
+
+    def set_metadata(self, entityid, metadata):
+        self.entities[entityid][3] = metadata
+
     def paintEvent(self, event):
         start = default_timer()
+        #print("painting")
 
         p = QPainter(self)
         p.begin(self)
@@ -139,9 +184,13 @@ class BWMapViewer(QWidget):
         zf = self.zoom_factor
         current_entity = self.current_entity
         last_color = None
-
+        #print("we are good")
+        #try:
+        drawbox = self.draw_box
+        drawentity = self.draw_entity
+        polycache = self.polygon_cache
         for entity, data in self.entities.items():
-            x, y, entitytype = data
+            x, y, entitytype, metadata = data
             x *= zf
             y *= zf
 
@@ -151,19 +200,51 @@ class BWMapViewer(QWidget):
                 color = "black"
             if last_color != color:
                 p.setBrush(QColor(color))
+                #p.setPen(QColor(color))
                 last_color = color
             if current_entity != entity:
-                p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
+                #print(entitytype)
+                if entitytype == "cMapZone":
+                    mapzonetype = metadata["zonetype"]
+                    if mapzonetype in MAPZONECOLORS:
+                        color = MAPZONECOLORS[mapzonetype]
+                    else:
+                        color = "grey"
+                    drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
+
+                    pen = p.pen()
+                    pen.setColor(QColor(color))
+                    origwidth = pen.width()
+                    pen.setWidth(5)
+                    p.setPen(pen)
+                    drawbox(p, x, y, ENTITY_SIZE, zf, entity, metadata, polycache)
+                    pen.setColor(QColor("black"))
+                    pen.setWidth(origwidth)
+                    p.setPen(pen)
+                else:
+                    drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
 
         # Draw the currently selected entity last so it is always above all other entities.
         if self.current_entity is not None:
-            x, y, entitytype = self.entities[self.current_entity]
+            x, y, entitytype, metadata = self.entities[self.current_entity]
             x *= zf
             y *= zf
 
             p.setBrush(QColor("red"))
 
-            p.drawRect(x-ENTITY_SIZE//2, y-ENTITY_SIZE//2, ENTITY_SIZE, ENTITY_SIZE)
+            if entitytype == "cMapZone":
+                self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
+                pen = p.pen()
+                pen.setColor(QColor("red"))
+                origwidth = pen.width()
+                pen.setWidth(8)
+                p.setPen(pen)
+                self.draw_box(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata, polycache)
+                pen.setColor(QColor("black"))
+                pen.setWidth(origwidth)
+                p.setPen(pen)
+            else:
+                self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
 
             p.setBrush(QColor("black"))
 
@@ -176,7 +257,7 @@ class BWMapViewer(QWidget):
         #x,y = event.localPos()
         #if event.x() < self.height() and event.y() < self.width:
 
-        print(event.x(),event.y())
+        print(event.x(), event.y())
         event_x, event_y = event.x(), event.y()
         hit = False
         search_start = default_timer()
@@ -189,7 +270,7 @@ class BWMapViewer(QWidget):
         entities_hit = []
 
         for entity, data in self.entities.items():
-            x, y, entitytype = data
+            x, y, entitytype, metadata = data
             x *= self.zoom_factor
             y *= self.zoom_factor
 
@@ -197,7 +278,7 @@ class BWMapViewer(QWidget):
                 and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
                 #hit = True
                 entities_hit.append(entity)
-
+        print("we got it")
         if len(entities_hit) > 0:
             if self.next_selected_index > (len(entities_hit) - 1):
                 self.next_selected_index = 0
