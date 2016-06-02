@@ -891,6 +891,7 @@ class EditorMainWindow(QMainWindow):
 
     def make_function(self, objtype):
         def toggle(toggled):
+            print("i was pressed")
             my_type = copy(objtype)
             self.types_visible[my_type] = toggled
             self.bw_map_screen.set_visibility(self.types_visible)
@@ -898,7 +899,6 @@ class EditorMainWindow(QMainWindow):
         return toggle
 
     def setup_visibility_toggles(self):
-
         for objtype in sorted(self.level.objtypes_with_positions):
 
             toggle = self.make_function(objtype)
@@ -920,25 +920,23 @@ class EditorMainWindow(QMainWindow):
         self.visibility_actions.append((toggle_all, self.toggle_visiblity_all))
 
     def toggle_visiblity_all(self):
-        try:
-            for action, func in self.visibility_actions:
-                if action.isCheckable():
-                    objtype = action.text()
-                    toggle = self.types_visible[objtype]
-                    self.types_visible[objtype] = not toggle
-                    action.setChecked(not toggle)
-
-            self.bw_map_screen.update()
-        except:
-            traceback.print_exc()
+        for action, func in self.visibility_actions:
+            if action.isCheckable():
+                objtype = action.text()
+                toggle = self.types_visible[objtype]
+                self.types_visible[objtype] = not toggle
+                action.setChecked(not toggle)
+                self.bw_map_screen.set_visibility(self.types_visible)
+        self.bw_map_screen.update()
 
     def clear_visibility_toggles(self):
-        for action, func in self.visibility_actions:
-            self.visibility_menu.removeAction(action)
-            action.destroy()
-        self.visibility_actions = []
-        self.types_visible = {}
-
+        try:
+            for action, func in self.visibility_actions:
+                self.visibility_menu.removeAction(action)
+            self.visibility_actions = []
+            self.types_visible = {}
+        except:
+            traceback.print_exc()
     def retranslateUi(self, MainWindow):
         _translate = QCoreApplication.translate
         self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))

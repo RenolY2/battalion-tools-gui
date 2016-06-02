@@ -73,6 +73,7 @@ class BWMapViewer(QWidget):
         self._zoom_factor = 10
         del self.polygon_cache
         self.polygon_cache = {}
+        self.visibility_toggle = {}
 
         self.SIZEX = 2048#1024
         self.SIZEY = 2048#1024
@@ -149,11 +150,13 @@ class BWMapViewer(QWidget):
             length = metadata["length"]*zf
             #print("drawing")
 
-            if entityid not in polycache or width != polycache[entityid][1] or length != polycache[entityid][2]:
+            if (entityid not in polycache or
+                        width != polycache[entityid][1] or length != polycache[entityid][2]
+                        or x != polycache[entityid][3] or y != polycache[entityid][4]):
                 polygon = QPolygon([QPoint(x-width//2, y-length//2), QPoint(x-width//2, y+length//2),
                                     QPoint(x+width//2, y+length//2), QPoint(x+width//2, y-length//2),
                                     QPoint(x-width//2, y-length//2)])
-                polycache[entityid] = [polygon, width, length]
+                polycache[entityid] = [polygon, width, length, x, y]
                 pass
             else:
                 pass
