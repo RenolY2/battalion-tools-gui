@@ -65,6 +65,8 @@ class BattWarsLevel(object):
         self.obj_map = {}
 
         self.resources = {}
+        self.objtypes = []
+        self.objtypes_with_positions = []
 
         for obj in self._root:
             bw_object = BattWarsObject(obj)
@@ -72,6 +74,12 @@ class BattWarsLevel(object):
                 continue
 
             self.obj_map[bw_object.id] = bw_object
+
+            if bw_object.type is not None and bw_object.type not in self.objtypes:
+                self.objtypes.append(bw_object.type)
+            if (bw_object.type is not None and bw_object.type not in self.objtypes_with_positions
+                and (bw_object.has_attr("Mat") or bw_object.has_attr("mMatrix"))):
+                self.objtypes_with_positions.append(bw_object.type)
 
             # All resourcees
             if bw_object.type is not None and bw_object.type.endswith("Resource"):
@@ -81,6 +89,7 @@ class BattWarsLevel(object):
                     self.resources[res_type] = [bw_object]
                 else:
                     self.resources[res_type].append(bw_object)
+
 
     # Todo: synchronize the resources dict
     def add_object(self, xml_node):
