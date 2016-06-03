@@ -12,16 +12,18 @@ from copy import copy, deepcopy
 import os
 from os import path
 from timeit import default_timer
+from math import atan2, degrees, radians, sin, cos
 
 from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
-                             QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar)
+                             QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QLineEdit)
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
 from lib.bw_read_xml import BattWarsLevel, BattWarsObject
-from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor, MenuDontClose
+from custom_widgets import (BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor, MenuDontClose,
+                            catch_exception)
 
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
@@ -32,6 +34,7 @@ MODEL_ATTR = {
     "cGroundVehicleBase": "mpModel",
     "sPickupBase": "mModel",
 }
+
 
 zoomvalues = [(0, 0.1), (1, 0.2), (2, 0.3), (3.2, 0.4), (4.4, 0.6)]
 def calc_zoom_in_factor(current):
@@ -69,16 +72,28 @@ for num in test:
     print(reverse, "--")
 """
 
-
 def update_mapscreen(mapscreen, obj):
-    if obj.type != "cMapZone":
-        return
+    if obj.type == "cMapZone":
 
-    width, height, length, unk = [x for x in map(float, obj.get_attr_value("mSize").split(","))]
-    radius = float(obj.get_attr_value("mRadius"))
-    mapscreen.set_metadata(obj.id,
-                            {"width": width, "length": length,
-                             "radius": radius, "zonetype": obj.get_attr_value("mZoneType")})
+        positions = [x for x in map(float, obj.get_attr_value("mMatrix").split(","))]
+
+        rotation2 = degrees(atan2(positions[0], positions[2]))
+        rotation = degrees(atan2(positions[8], positions[10]))
+
+        width, height, length, unk = [x for x in map(float, obj.get_attr_value("mSize").split(","))]
+        radius = float(obj.get_attr_value("mRadius"))
+        mapscreen.set_metadata(obj.id,
+                                {"width": width, "length": length,
+                                 "radius": radius, "zonetype": obj.get_attr_value("mZoneType"),
+                                 "angle": rotation, "angle2": rotation2})
+    elif obj.has_attr("Mat"):
+        positions = [x for x in map(float, obj.get_attr_value("Mat").split(","))]
+        rotation2 = degrees(atan2(positions[0], positions[2]))
+        rotation = degrees(atan2(positions[8], positions[10]))
+
+        mapscreen.set_metadata(obj.id,
+            {"angle": rotation, "angle2": rotation2})
+
 
 def get_position_attribute(obj):
     if obj.has_attr("Mat"):
@@ -122,7 +137,7 @@ def entity_get_model(xml, entityid):
 
         return modelobj.get_attr_value("mName")
     except:
-        traceback.print_exc()
+        #traceback.print_exc()
         return None
 
 
@@ -133,7 +148,7 @@ def entity_get_army(xml, entityid):
 
         return baseobj.get_attr_value("mArmy")
     except:
-        traceback.print_exc()
+        #traceback.print_exc()
         return None
 
 
@@ -144,7 +159,7 @@ def entity_get_icon_type(xml, entityid):
 
         return baseobj.get_attr_value("unitIcon")
     except:
-        traceback.print_exc()
+        #traceback.print_exc()
         return None
 
 
@@ -169,24 +184,34 @@ def get_default_path():
         return None
 
 
-
 def object_get_position(xml, entityid):
     obj = xml.obj_map[entityid]
     matrix_name = get_position_attribute(obj)
 
     matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
+    angle = degrees(atan2(matr4x4[8], matr4x4[10]))
+
     x, y = matr4x4[12], matr4x4[14]
 
-    return x, y
+    return x, y, angle
 
 
-def object_set_position(xml, entityid, x, y):
+def object_set_position(xml, entityid, x, y, angle=None):
     obj = xml.obj_map[entityid]
     matrix_name = get_position_attribute(obj)
 
     matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
     matr4x4[12] = x
     matr4x4[14] = y
+
+    if angle is not None:
+        angle2 = radians((angle+90) % 360)
+        angle = radians(angle)
+        matr4x4[0] = sin(angle2)
+        matr4x4[2] = cos(angle2)
+        matr4x4[8] = sin(angle)
+        matr4x4[10] = cos(angle)
+
 
     obj.set_attr_value(matrix_name, ",".join(str(x) for x in matr4x4))
 
@@ -230,6 +255,9 @@ class EditorMainWindow(QMainWindow):
         self.button_show_passengers.pressed.connect(self.action_passenger_window)
         self.button_edit_xml.pressed.connect(self.action_open_xml_editor)
         self.button_edit_base_xml.pressed.connect(self.action_open_basexml_editor)
+
+        self.lineedit_angle.textEdited.connect(self.action_lineedit_changeangle)
+
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
@@ -312,7 +340,6 @@ class EditorMainWindow(QMainWindow):
 
             self.statusbar.showMessage("Saved base object {0} as {1}".format(
                 self.basexmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
-
         except:
             self.statusbar.showMessage("Saving base object failed")
             traceback.print_exc()
@@ -332,7 +359,6 @@ class EditorMainWindow(QMainWindow):
             self.xmlobject_textbox.set_content(entityobj._xml_node)
 
             self.xmlobject_textbox.update()
-        #self.xmlobject_textbox.show()
 
     def xmleditor_action_save_object_xml(self):
         self.statusbar.showMessage("Saving object changes...")
@@ -385,7 +411,7 @@ class EditorMainWindow(QMainWindow):
                 xml_node.set("id", cloned_id)
                 self.level.add_object(xml_node)
 
-                bw_x, bw_y = object_get_position(self.level, cloned_id)
+                bw_x, bw_y, angle = object_get_position(self.level, cloned_id)
                 print("CURRENT_POSITION", bw_x, bw_y)
                 x, y = bw_coords_to_image_coords(bw_x, bw_y)
                 print(bw_x, bw_y, (image_coords_to_bw_coords(x, y)))
@@ -564,7 +590,7 @@ class EditorMainWindow(QMainWindow):
                                 continue
                             #if not obj.has_attr("Mat"):
                             #    continue
-                            x, y = object_get_position(self.level, obj_id)
+                            x, y, angle = object_get_position(self.level, obj_id)
                             assert type(x) != str
                             x, y = bw_coords_to_image_coords(x, y)
 
@@ -572,8 +598,8 @@ class EditorMainWindow(QMainWindow):
                             self.entity_list_widget.addItem(item)
 
                             self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
-                            if obj.type == "cMapZone":
-                                update_mapscreen(self.bw_map_screen, obj)
+                            #if obj.type == "cMapZone":
+                            update_mapscreen(self.bw_map_screen, obj)
 
                         print("ok")
                         self.bw_map_screen.update()
@@ -695,9 +721,9 @@ class EditorMainWindow(QMainWindow):
             else:
                 self.label_object_id.setText("{0}\n[{1}]".format(entityid, obj.type))
             self.label_model_name.setText("Model: {0}".format(entity_get_model(self.level, entityid)))
-            x, y = object_get_position(self.level, entityid)
+            x, y, angle = object_get_position(self.level, entityid)
             self.label_position.setText("x: {0}\ny: {1}".format(x, y))
-
+            self.lineedit_angle.setText(str(round(angle,2)))
             self.label_4.setText("Army: {0}".format(entity_get_army(self.level, entityid)))
             if not obj.has_attr("mPassenger"):
                 self.label_5.setText("Icon Type: \n{0}".format(entity_get_icon_type(self.level, entityid)))
@@ -783,6 +809,24 @@ class EditorMainWindow(QMainWindow):
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
 
+    def action_lineedit_changeangle(self):
+        if not self.resetting and self.bw_map_screen.current_entity is not None:
+            print("ok")
+            current = self.bw_map_screen.current_entity
+            currx, curry, angle = object_get_position(self.level, current)
+
+            newangle = self.lineedit_angle.text().strip()
+            print(newangle, newangle.isdecimal())
+            try:
+                angle = float(newangle)
+                object_set_position(self.level, current, currx, curry, angle=angle)
+                currentobj = self.level.obj_map[current]
+                update_mapscreen(self.bw_map_screen, currentobj)
+                self.bw_map_screen.update()
+            except:
+                traceback.print_exc()
+
+
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -855,6 +899,7 @@ class EditorMainWindow(QMainWindow):
         self.button_edit_base_xml = QPushButton(self.centralwidget)
         self.button_edit_base_xml.setObjectName("button_edit_base_xml")
 
+
         self.verticalLayout.addLayout(self.gridLayout)
         self.verticalLayout.addWidget(self.button_edit_xml)
         self.verticalLayout.addWidget(self.button_edit_base_xml)
@@ -865,6 +910,10 @@ class EditorMainWindow(QMainWindow):
         self.verticalLayout_2 = QVBoxLayout()
         self.verticalLayout_2.setObjectName("verticalLayout_2")
 
+
+        self.lineedit_angle = QLineEdit(self.centralwidget)
+        self.lineedit_angle.setObjectName("lineedit_angle")
+        self.lineedit_angle.setPlaceholderText("Angle")
 
         self.label_object_id = QLabel(self.centralwidget)
         self.label_object_id.setObjectName("label_object_id")
@@ -885,11 +934,13 @@ class EditorMainWindow(QMainWindow):
         for label in (self.label_object_id, self.label_position, self.label_model_name, self.label_4, self.label_5):
             label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
+        self.verticalLayout_2.addWidget(self.lineedit_angle)
         self.verticalLayout_2.addWidget(self.label_object_id)
         self.verticalLayout_2.addWidget(self.label_position)
         self.verticalLayout_2.addWidget(self.label_model_name)
         self.verticalLayout_2.addWidget(self.label_4)
         self.verticalLayout_2.addWidget(self.label_5)
+
 
         self.verticalLayout.addLayout(self.verticalLayout_2)
 

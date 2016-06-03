@@ -1,8 +1,9 @@
 import traceback
 import math
+import xml.etree.ElementTree as etree
 from timeit import default_timer
 from copy import copy
-import xml.etree.ElementTree as etree
+from math import sin, cos, atan2, radians
 
 from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
@@ -26,6 +27,29 @@ MAPZONECOLORS = {
 DEFAULT_ENTITY = QColor("black")
 DEFAULT_MAPZONE = QColor("grey")
 DEFAULT_SELECTED = QColor("red")
+DEFAULT_ANGLE_MARKER = QColor("blue")
+
+def catch_exception(func):
+    def handle(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except:
+            traceback.print_exc()
+            #raise
+    return handle
+
+
+def rotate(corner_x, corner_y, center_x, center_y, angle):
+    temp_x = corner_x-center_x
+    temp_y = corner_y-center_y
+    angle = radians(angle)
+
+    rotated_x = temp_x*cos(angle) - temp_y*sin(angle)
+    rotated_y = temp_x*sin(angle) + temp_y*cos(angle)
+    #print(sin(radians(angle)))
+
+    return QPoint(int(rotated_x+center_x), int(rotated_y+center_y))
+
 
 class BWMapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
@@ -143,6 +167,26 @@ class BWMapViewer(QWidget):
 
     def draw_entity(self, painter, x, y, size, zf, entityid, metadata):
         #print(x,y,size, type(x), type(y), type(size), metadata)
+        if metadata is not None and "angle" in metadata and "angle2" in metadata:
+            if entityid == self.current_entity:
+                angle = metadata["angle"]
+                angle2 = metadata["angle2"]
+
+                center = QPoint(x,y)
+                pen = painter.pen()
+                prevwidth = pen.width()
+                prevcolor = pen.color()
+                pen.setColor(DEFAULT_ANGLE_MARKER)
+                pen.setWidth(4)
+                painter.setPen(pen)
+                line1 = rotate(x, y-20, x, y, angle)
+                line2 = rotate(x, y-20, x, y, angle2)
+
+                painter.drawLine(center, line1)
+                pen.setColor(prevcolor)
+                pen.setWidth(prevwidth)
+                painter.setPen(pen)
+                painter.drawLine(center, line2)
         painter.drawRect(x-size//2, y-size//2, size, size)
 
     def draw_box(self, painter, x, y, size, zf, entityid, metadata, polycache):
@@ -155,14 +199,20 @@ class BWMapViewer(QWidget):
             if (entityid not in polycache or
                         width != polycache[entityid][1] or length != polycache[entityid][2]
                         or x != polycache[entityid][3] or y != polycache[entityid][4]):
-                polygon = QPolygon([QPoint(x-width//2, y-length//2), QPoint(x-width//2, y+length//2),
-                                    QPoint(x+width//2, y+length//2), QPoint(x+width//2, y-length//2),
-                                    QPoint(x-width//2, y-length//2)])
+
+                angle = metadata["angle"]
+                p1 = rotate(x-width//2, y-length//2, x, y, angle)
+                p2 = rotate(x-width//2, y+length//2, x, y, angle)#QPoint(x-width//2, y+length//2)
+                p3 = rotate(x+width//2, y+length//2, x, y, angle)#QPoint(x+width//2, y+length//2)
+                p4 = rotate(x+width//2, y-length//2, x, y, angle)#QPoint(x+width//2, y-length//2)
+                polygon = QPolygon([p1, p2, p3, p4,
+                                    p1])
                 polycache[entityid] = [polygon, width, length, x, y]
                 pass
             else:
                 pass
                 polygon = polycache[entityid][0]
+
 
             #painter.rotate(45)
             radius = metadata["radius"]*zf
@@ -175,6 +225,7 @@ class BWMapViewer(QWidget):
     def set_metadata(self, entityid, metadata):
         self.entities[entityid][3] = metadata
 
+    #@catch_exception
     def paintEvent(self, event):
         start = default_timer()
         #print("painting")
