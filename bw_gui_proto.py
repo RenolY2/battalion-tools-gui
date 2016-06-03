@@ -7,6 +7,7 @@
 # WARNING! All changes made in this file will be lost!
 
 import traceback
+import itertools
 from copy import copy, deepcopy
 import os
 from os import path
@@ -24,7 +25,6 @@ from custom_widgets import BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPas
 
 MODEL_ATTR = {
     "sAirVehicleBase": "model",
-    "cObjectiveMarkerBase": "mModel",
     "cBuildingImpBase": "mpModel",
     "cObjectiveMarkerBase": "mModel",
     "sDestroyBase": "Model",
@@ -32,6 +32,43 @@ MODEL_ATTR = {
     "cGroundVehicleBase": "mpModel",
     "sPickupBase": "mModel",
 }
+
+zoomvalues = [(0, 0.1), (1, 0.2), (2, 0.3), (3.2, 0.4), (4.4, 0.6)]
+def calc_zoom_in_factor(current):
+    zoom = 0.2
+    for val, zoomfac in zoomvalues:
+        if val <= current:
+            zoom = zoomfac
+        elif val > current:
+            break
+
+    return zoom
+
+def calc_zoom_out_factor(current):
+    zoom = -0.2
+    for val, zoomfac in reversed(zoomvalues):
+        if val >= current:
+            pass
+        elif val < current:
+            zoom = zoomfac
+            break
+    return -zoom
+
+""" Test for the zoom factor calculation
+test = itertools.chain(range(1, 10, 1), range(10, 20, 2), range(20, 32, 3))
+
+for num in test:
+    num = num/10.0
+    out = [num]
+    for i in range(20):
+        out.append(round(out[-1]+calc_zoom_in_factor(out[-1]), 1))
+    print(out)
+    reverse = [out[-1]]
+    for i in range(20):
+        reverse.append(round(reverse[-1]+calc_zoom_out_factor(reverse[-1]), 1))
+    print(reverse, "--")
+"""
+
 
 def update_mapscreen(mapscreen, obj):
     if obj.type != "cMapZone":
@@ -632,7 +669,7 @@ class EditorMainWindow(QMainWindow):
     def mouse_move(self, event):
         x, y = image_coords_to_bw_coords(event.x()/self.bw_map_screen.zoom_factor,
                                          event.y()/self.bw_map_screen.zoom_factor)
-        self.statusbar.showMessage("x: {0} y: {1}".format(x, y))
+        self.statusbar.showMessage("x: {0} y: {1}".format(round(x, 5), round(y, 5)))
 
         if self.dragging and default_timer() - self.dragged_time > 0.1:
             delta_x = (event.x()-self.last_x)/8
@@ -713,8 +750,8 @@ class EditorMainWindow(QMainWindow):
 
         #oldzf = self.bw_map_screen.zoom_factor / (0.1+1)
         #diff = oldzf - self.bw_map_screen.zoom_factor
-        #zf = self.bw_map_screen.zoom_factor/1.10
-        self.bw_map_screen.zoom(-0.2)#diff)
+        zf = self.bw_map_screen.zoom_factor
+        self.bw_map_screen.zoom(calc_zoom_out_factor(zf))#diff)
         self.bw_map_screen.update()
 
 
@@ -735,8 +772,10 @@ class EditorMainWindow(QMainWindow):
         if vertbar.maximum() > 0:
             heightratio = vertbar.value()/vertbar.maximum()
         else:
-            heightratio = 0#zf = self.bw_map_screen.zoom_factor*0.10
-        self.bw_map_screen.zoom(0.2)#zf)
+            heightratio = 0
+
+        zf = self.bw_map_screen.zoom_factor
+        self.bw_map_screen.zoom(calc_zoom_in_factor(zf))#zf)
         self.bw_map_screen.update()
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
 

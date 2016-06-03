@@ -14,16 +14,18 @@ from PyQt5.QtCore import Qt
 ENTITY_SIZE = 10
 
 COLORS = {
-    "cAirVehicle": "yellow",
-    "cGroundVehicle": "brown",
-    "cTroop": "blue",
-    "cMapZone": "grey"
+    "cAirVehicle": QColor("yellow"),
+    "cGroundVehicle": QColor("brown"),
+    "cTroop": QColor("blue"),
+    "cMapZone": QColor("grey")
 }
 
 MAPZONECOLORS = {
-    "ZONETYPE_MISSIONBOUNDARY": "light green"
+    "ZONETYPE_MISSIONBOUNDARY": QColor("light green")
 }
-
+DEFAULT_ENTITY = QColor("black")
+DEFAULT_MAPZONE = QColor("grey")
+DEFAULT_SELECTED = QColor("red")
 
 class BWMapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
@@ -208,9 +210,9 @@ class BWMapViewer(QWidget):
             if entitytype in COLORS:
                 color = COLORS[entitytype]
             else:
-                color = "black"
+                color = DEFAULT_ENTITY
             if last_color != color:
-                p.setBrush(QColor(color))
+                p.setBrush(color)
                 #p.setPen(QColor(color))
                 last_color = color
             if current_entity != entity:
@@ -220,16 +222,16 @@ class BWMapViewer(QWidget):
                     if mapzonetype in MAPZONECOLORS:
                         color = MAPZONECOLORS[mapzonetype]
                     else:
-                        color = "grey"
+                        color = DEFAULT_MAPZONE
                     drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
 
                     pen = p.pen()
-                    pen.setColor(QColor(color))
+                    pen.setColor(color)
                     origwidth = pen.width()
                     pen.setWidth(5)
                     p.setPen(pen)
                     drawbox(p, x, y, ENTITY_SIZE, zf, entity, metadata, polycache)
-                    pen.setColor(QColor("black"))
+                    pen.setColor(DEFAULT_ENTITY)
                     pen.setWidth(origwidth)
                     p.setPen(pen)
                 else:
@@ -246,18 +248,18 @@ class BWMapViewer(QWidget):
             if entitytype == "cMapZone":
                 self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
                 pen = p.pen()
-                pen.setColor(QColor("red"))
+                pen.setColor(DEFAULT_SELECTED)
                 origwidth = pen.width()
                 pen.setWidth(8)
                 p.setPen(pen)
                 self.draw_box(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata, polycache)
-                pen.setColor(QColor("black"))
+                pen.setColor(DEFAULT_ENTITY)
                 pen.setWidth(origwidth)
                 p.setPen(pen)
             else:
                 self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
 
-            p.setBrush(QColor("black"))
+            p.setBrush(DEFAULT_ENTITY)
 
         p.end()
         end = default_timer()
@@ -290,6 +292,7 @@ class BWMapViewer(QWidget):
                 and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
                 #hit = True
                 entities_hit.append(entity)
+
         print("we got it")
         if len(entities_hit) > 0:
             if self.next_selected_index > (len(entities_hit) - 1):
