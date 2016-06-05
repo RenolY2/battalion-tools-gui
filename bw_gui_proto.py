@@ -255,8 +255,7 @@ class EditorMainWindow(QMainWindow):
         self.button_show_passengers.pressed.connect(self.action_passenger_window)
         self.button_edit_xml.pressed.connect(self.action_open_xml_editor)
         self.button_edit_base_xml.pressed.connect(self.action_open_basexml_editor)
-
-        self.lineedit_angle.textEdited.connect(self.action_lineedit_changeangle)
+        self.lineedit_angle.editingFinished.connect(self.action_lineedit_changeangle)
 
 
         self.bw_map_screen.mouse_clicked.connect(self.get_position)
@@ -335,8 +334,8 @@ class EditorMainWindow(QMainWindow):
             #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
             assert self.basexmlobject_textbox.entity == xmlnode.get("id")  # Disallow changing the id of the base object
 
-            del self.level.obj_map[xmlnode.get("id")]
-            self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
+            self.level.remove_object(xmlnode.get("id"))
+            self.level.add_object(xmlnode)
 
             self.statusbar.showMessage("Saved base object {0} as {1}".format(
                 self.basexmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
@@ -387,8 +386,8 @@ class EditorMainWindow(QMainWindow):
                 self.xmlobject_textbox.set_title(xmlnode.get("id"))
 
             else:
-                del self.level.obj_map[xmlnode.get("id")]
-                self.level.obj_map[xmlnode.get("id")] = BattWarsObject(xmlnode)
+                self.level.remove_object(xmlnode.get("id"))
+                self.level.add_object(xmlnode)
 
             update_mapscreen(self.bw_map_screen, self.level.obj_map[xmlnode.get("id")])
 
@@ -1027,6 +1026,7 @@ class EditorMainWindow(QMainWindow):
             self.types_visible = {}
         except:
             traceback.print_exc()
+
     def retranslateUi(self, MainWindow):
         _translate = QCoreApplication.translate
         self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))
@@ -1034,7 +1034,7 @@ class EditorMainWindow(QMainWindow):
         self.button_move_entity.setText(_translate("MainWindow", "Move Entity"))
         self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
         self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
-        self.button_show_passengers.setText(_translate("MainWindow", "Show passengers"))
+        self.button_show_passengers.setText(_translate("MainWindow", "Show Passengers"))
         self.button_edit_xml.setText("Edit Object XML")
         self.button_edit_base_xml.setText("Edit Base Object XML")
 

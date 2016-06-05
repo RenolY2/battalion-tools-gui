@@ -177,10 +177,10 @@ class BWMapViewer(QWidget):
                 prevwidth = pen.width()
                 prevcolor = pen.color()
                 pen.setColor(DEFAULT_ANGLE_MARKER)
-                pen.setWidth(4)
+                pen.setWidth(int(4))
                 painter.setPen(pen)
-                line1 = rotate(x, y-20, x, y, angle)
-                line2 = rotate(x, y-20, x, y, angle2)
+                line1 = rotate(x, y-int(60*(zf/8.0)), x, y, angle)
+                line2 = rotate(x, y-int(40*(zf/8.0)), x, y, angle2)
 
                 painter.drawLine(center, line1)
                 pen.setColor(prevcolor)
@@ -198,7 +198,8 @@ class BWMapViewer(QWidget):
 
             if (entityid not in polycache or
                         width != polycache[entityid][1] or length != polycache[entityid][2]
-                        or x != polycache[entityid][3] or y != polycache[entityid][4]):
+                        or x != polycache[entityid][3] or y != polycache[entityid][4]
+                        or metadata["angle"] != polycache[entityid][5]):
 
                 angle = metadata["angle"]
                 p1 = rotate(x-width//2, y-length//2, x, y, angle)
@@ -207,7 +208,7 @@ class BWMapViewer(QWidget):
                 p4 = rotate(x+width//2, y-length//2, x, y, angle)#QPoint(x+width//2, y-length//2)
                 polygon = QPolygon([p1, p2, p3, p4,
                                     p1])
-                polycache[entityid] = [polygon, width, length, x, y]
+                polycache[entityid] = [polygon, width, length, x, y, angle]
                 pass
             else:
                 pass
