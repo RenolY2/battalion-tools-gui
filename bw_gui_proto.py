@@ -21,206 +21,18 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
+from res_tools.bw_archive_base import BWArchiveBase
+
 from lib.bw_read_xml import BattWarsLevel, BattWarsObject
 from custom_widgets import (BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor, MenuDontClose,
                             catch_exception)
 
-MODEL_ATTR = {
-    "sAirVehicleBase": "model",
-    "cBuildingImpBase": "mpModel",
-    "cObjectiveMarkerBase": "mModel",
-    "sDestroyBase": "Model",
-    "sTroopBase": "mBAN_Model",
-    "cGroundVehicleBase": "mpModel",
-    "sPickupBase": "mModel",
-}
-
-
-zoomvalues = [(0, 0.1), (1, 0.2), (2, 0.3), (3.2, 0.4), (4.4, 0.6)]
-def calc_zoom_in_factor(current):
-    zoom = 0.2
-    for val, zoomfac in zoomvalues:
-        if val <= current:
-            zoom = zoomfac
-        elif val > current:
-            break
-
-    return zoom
-
-def calc_zoom_out_factor(current):
-    zoom = -0.2
-    for val, zoomfac in reversed(zoomvalues):
-        if val >= current:
-            pass
-        elif val < current:
-            zoom = zoomfac
-            break
-    return -zoom
-
-""" Test for the zoom factor calculation
-test = itertools.chain(range(1, 10, 1), range(10, 20, 2), range(20, 32, 3))
-
-for num in test:
-    num = num/10.0
-    out = [num]
-    for i in range(20):
-        out.append(round(out[-1]+calc_zoom_in_factor(out[-1]), 1))
-    print(out)
-    reverse = [out[-1]]
-    for i in range(20):
-        reverse.append(round(reverse[-1]+calc_zoom_out_factor(reverse[-1]), 1))
-    print(reverse, "--")
-"""
-
-def update_mapscreen(mapscreen, obj):
-    if obj.type == "cMapZone":
-
-        positions = [x for x in map(float, obj.get_attr_value("mMatrix").split(","))]
-
-        rotation2 = degrees(atan2(positions[0], positions[2]))
-        rotation = degrees(atan2(positions[8], positions[10]))
-
-        width, height, length, unk = [x for x in map(float, obj.get_attr_value("mSize").split(","))]
-        radius = float(obj.get_attr_value("mRadius"))
-        mapscreen.set_metadata(obj.id,
-                                {"width": width, "length": length,
-                                 "radius": radius, "zonetype": obj.get_attr_value("mZoneType"),
-                                 "angle": rotation, "angle2": rotation2})
-    elif obj.has_attr("Mat"):
-        positions = [x for x in map(float, obj.get_attr_value("Mat").split(","))]
-        rotation2 = degrees(atan2(positions[0], positions[2]))
-        rotation = degrees(atan2(positions[8], positions[10]))
-
-        mapscreen.set_metadata(obj.id,
-            {"angle": rotation, "angle2": rotation2})
-
-
-def get_position_attribute(obj):
-    if obj.has_attr("Mat"):
-        return "Mat"
-    if obj.type == "cMapZone":
-        return "mMatrix"
-
-    return None
-
-def bw_coords_to_image_coords(bw_x, bw_y):
-    img_x = ((bw_x + (4096//2)) // 2)
-    img_y = ((bw_y + (4096//2)) // 2)
-    img_y = (4096//2) - img_y
-
-    return img_x, img_y
-
-
-def image_coords_to_bw_coords(img_x, img_y):
-    bw_x = img_x*2 - (4096//2)
-    bw_y = (4096//2) - 2*img_y
-
-    #print(img_x, img_y, bw_x, bw_y)
-
-    return bw_x, bw_y
-
-for ix in range(0, 2048+1, 1024):
-    for iy in range(0, 2048+1, 1024):
-        x, y = image_coords_to_bw_coords(ix, iy)
-        print(ix, iy, x, y, bw_coords_to_image_coords(x, y))
-
-
-
-
-def entity_get_model(xml, entityid):
-    try:
-        entityobj = xml.obj_map[entityid]
-        baseobj = xml.obj_map[entityobj.get_attr_value("mBase")]
-        modelobj = xml.obj_map[baseobj.get_attr_value(
-            MODEL_ATTR[baseobj.type]
-        )]
-
-        return modelobj.get_attr_value("mName")
-    except:
-        #traceback.print_exc()
-        return None
-
-
-def entity_get_army(xml, entityid):
-    try:
-        entityobj = xml.obj_map[entityid]
-        baseobj = xml.obj_map[entityobj.get_attr_value("mBase")]
-
-        return baseobj.get_attr_value("mArmy")
-    except:
-        #traceback.print_exc()
-        return None
-
-
-def entity_get_icon_type(xml, entityid):
-    try:
-        entityobj = xml.obj_map[entityid]
-        baseobj = xml.obj_map[entityobj.get_attr_value("mBase")]
-
-        return baseobj.get_attr_value("unitIcon")
-    except:
-        #traceback.print_exc()
-        return None
-
-
-def set_default_path(path):
-    print("WRITING", path)
-    try:
-        with open("default_path.cfg", "wb") as f:
-            f.write(bytes(path, encoding="utf-8"))
-    except Exception as error:
-        print("couldn't write path")
-        traceback.print_exc()
-        pass
-
-
-def get_default_path():
-    print("READING")
-    try:
-        with open("default_path.cfg", "rb") as f:
-            path = str(f.read(), encoding="utf-8")
-        return path
-    except:
-        return None
-
-
-def object_get_position(xml, entityid):
-    obj = xml.obj_map[entityid]
-    matrix_name = get_position_attribute(obj)
-
-    matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
-    angle = degrees(atan2(matr4x4[8], matr4x4[10]))
-
-    x, y = matr4x4[12], matr4x4[14]
-
-    return x, y, angle
-
-
-def object_set_position(xml, entityid, x, y, angle=None):
-    obj = xml.obj_map[entityid]
-    matrix_name = get_position_attribute(obj)
-
-    matr4x4 = [float(x) for x in obj.get_attr_value(matrix_name).split(",")]
-    matr4x4[12] = x
-    matr4x4[14] = y
-
-    if angle is not None:
-        angle2 = radians((angle+90) % 360)
-        angle = radians(angle)
-        matr4x4[0] = sin(angle2)
-        matr4x4[2] = cos(angle2)
-        matr4x4[8] = sin(angle)
-        matr4x4[10] = cos(angle)
-
-
-    obj.set_attr_value(matrix_name, ",".join(str(x) for x in matr4x4))
-
-
-def get_type(typename):
-    if typename in ("cGroundVehicle", "cTroop", "cAirVehicle", "cWaterVehicle"):
-        return "a"
-    else:
-        return "b"
+from lib.helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
+                                  get_default_path, set_default_path, update_mapscreen,
+                                  bw_coords_to_image_coords, image_coords_to_bw_coords,
+                                  entity_get_army, entity_get_icon_type, entity_get_model,
+                                  object_set_position, object_get_position, get_position_attribute, get_type,
+                                  parse_terrain_to_image)
 
 
 class EditorMainWindow(QMainWindow):
@@ -277,6 +89,7 @@ class EditorMainWindow(QMainWindow):
         self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
 
         self.types_visible = {}
+        self.terrain_image = None
 
         status.showMessage("Ready")
 
@@ -825,7 +638,24 @@ class EditorMainWindow(QMainWindow):
             except:
                 traceback.print_exc()
 
-
+    def button_terrain_load_action(self):
+        try:
+            print("ok", self.default_path)
+            filepath, choosentype = QFileDialog.getOpenFileName(
+                self, "Open File",
+                self.default_path,
+                "BW terrain files (*.out);;All files (*)")
+            print("doooone")
+            if filepath:
+                with open(filepath, "rb") as f:
+                    try:
+                        terrain = BWArchiveBase(f)
+                        image = parse_terrain_to_image(terrain)
+                        self.bw_map_screen.set_terrain(image)
+                    except:
+                        traceback.print_exc()
+        except:
+            traceback.print_exc()
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -952,9 +782,6 @@ class EditorMainWindow(QMainWindow):
         self.file_menu.setObjectName("menuLoad")
 
 
-        self.visibility_menu = MenuDontClose(self.menubar)#QMenu(self.menubar)
-        self.visibility_menu.setObjectName("visibility")
-
 
         self.file_load_action = QAction("Load", self)
         self.file_load_action.triggered.connect(self.button_load_level)
@@ -963,8 +790,19 @@ class EditorMainWindow(QMainWindow):
         self.file_save_action.triggered.connect(self.button_save_level)
         self.file_menu.addAction(self.file_save_action)
 
+        self.visibility_menu = MenuDontClose(self.menubar)#QMenu(self.menubar)
+        self.visibility_menu.setObjectName("visibility")
+
+
         #self.visibility_menu.addAction(self.toggle_action)
         self.visibility_actions = []
+
+        self.terrain_menu = QMenu(self.menubar)
+        self.terrain_menu.setObjectName("terrain")
+
+        self.terrain_load_action = QAction("Load Terrain", self)
+        self.terrain_load_action.triggered.connect(self.button_terrain_load_action)
+        self.terrain_menu.addAction(self.terrain_load_action)
 
         #self.menuLoad_2 = QMenu(self.menubar)
         #self.menuLoad_2.setObjectName("menuLoad_2")
@@ -975,6 +813,7 @@ class EditorMainWindow(QMainWindow):
         self.menubar.addAction(self.file_menu.menuAction())
         #self.menubar.addAction(self.menuLoad_2.menuAction())
         self.menubar.addAction(self.visibility_menu.menuAction())
+        self.menubar.addAction(self.terrain_menu.menuAction())
         self.retranslateUi(MainWindow)
         QMetaObject.connectSlotsByName(MainWindow)
 
@@ -1045,6 +884,7 @@ class EditorMainWindow(QMainWindow):
         self.label_5.setText(_translate("MainWindow", "TextLabel5"))
         self.file_menu.setTitle(_translate("MainWindow", "File"))
         self.visibility_menu.setTitle(_translate("MainWindow", "Visibility"))
+        self.terrain_menu.setTitle("Terrain")
 
 if __name__ == "__main__":
     import sys

@@ -5,10 +5,10 @@ from timeit import default_timer
 from copy import copy
 from math import sin, cos, atan2, radians
 
-from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon
+from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
                             QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
-from PyQt5.QtCore import QSize, pyqtSignal, QPoint
+from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
 from PyQt5.QtCore import Qt
 
 
@@ -16,9 +16,12 @@ ENTITY_SIZE = 10
 
 COLORS = {
     "cAirVehicle": QColor("yellow"),
-    "cGroundVehicle": QColor("brown"),
+    "cGroundVehicle": QColor(180, 50, 0),#QColor("brown"),
     "cTroop": QColor("blue"),
-    "cMapZone": QColor("grey")
+    "cMapZone": QColor("grey"),
+    "cCamera": QColor("violet"),
+    "cWaypoint": QColor("cyan"),
+    "cSceneryCluster": QColor(90, 40, 40)
 }
 
 MAPZONECOLORS = {
@@ -59,6 +62,8 @@ class BWMapViewer(QWidget):
 
     ENTITY_SIZE = ENTITY_SIZE
 
+
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -85,6 +90,14 @@ class BWMapViewer(QWidget):
         self.current_entity = None
         self.visibility_toggle = {}
 
+        self.terrain = None
+        self.terrain_scaled = None
+        self.terrain_buffer = QImage()
+
+        self.p = QPainter()
+        self.p2 = QPainter()
+
+
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
 
@@ -106,6 +119,9 @@ class BWMapViewer(QWidget):
 
         self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
         self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
+
+        self.terrain = None
+        self.terrain_scaled = QImage()
 
     @property
     def zoom_factor(self):
@@ -164,6 +180,13 @@ class BWMapViewer(QWidget):
             zf = self.zoom_factor
             self.setMinimumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
             self.setMaximumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
+
+            self.terrain_buffer = QImage()
+
+            """if self.terrain is not None:
+                if self.terrain_scaled is None:
+                    self.terrain_scaled = self.terrain
+                self.terrain_scaled = self.terrain_scaled.scaled(self.height(), self.width())"""
 
     def draw_entity(self, painter, x, y, size, zf, entityid, metadata):
         #print(x,y,size, type(x), type(y), type(size), metadata)
@@ -226,17 +249,56 @@ class BWMapViewer(QWidget):
     def set_metadata(self, entityid, metadata):
         self.entities[entityid][3] = metadata
 
+    def set_terrain(self, terrain):
+        self.terrain = QPixmap.fromImage(terrain)
+        #self.terrain_scaled = self.terrain.scaled(self.height(), self.width())
+
+
     #@catch_exception
     def paintEvent(self, event):
         start = default_timer()
         #print("painting")
 
-        p = QPainter(self)
+        p = self.p
         p.begin(self)
         h = self.height()
         w = self.width()
         p.setBrush(QColor("white"))
         p.drawRect(0, 0, h-1, w-1)
+        if self.terrain is not None:
+            #print("drawing image")
+            #print(self.height(), self.width(), self.terrain.height(), self.terrain.width())
+            """exposedRect = event.rect()#p.matrix().inverted().mapRect(event.rect()).adjusted(-1, -1, 1, 1);
+            print(exposedRect.height(), exposedRect.width())
+            print(exposedRect.topLeft())
+            exp_rect_x = exposedRect.topLeft().x()
+            exp_rect_y = exposedRect.topLeft().y()
+            adjusted_startx = int(exp_rect_x / self.zoom_factor)//2
+            adjusted_starty = int(exp_rect_y / self.zoom_factor)//2
+            adjusted_width = int(exposedRect.width() / self.zoom_factor)//2
+            adjusted_height = int(exposedRect.height() / self.zoom_factor)//2
+            print("sizes", adjusted_height, adjusted_width, adjusted_startx, adjusted_starty)
+
+            terrain_part = self.terrain.copy(adjusted_startx, adjusted_starty, adjusted_width, adjusted_height)
+            scaled_terrain = terrain_part.scaled(exposedRect.width(), exposedRect.height())
+
+            #self.p2.begin(self.terrain_buffer)
+            #self.p2.drawImage(exposedRect.topLeft().x(), exposedRect.topLeft().y(), scaled_terrain)
+            p.drawImage(exp_rect_x, exp_rect_y, scaled_terrain)"""
+            exposedRect = event.rect()
+            exp_rect_x = exposedRect.topLeft().x()
+            exp_rect_y = exposedRect.topLeft().y()
+            adjusted_startx = (exp_rect_x / self.zoom_factor)/2
+            adjusted_starty = (exp_rect_y / self.zoom_factor)/2
+            adjusted_width = (exposedRect.width() / self.zoom_factor)/2
+            adjusted_height = (exposedRect.height() / self.zoom_factor)/2
+            #self.p2.end()
+            #p.drawImage(0,0, self.terrain_buffer)
+            #p.drawImage(0, 0, self.terrain_scaled)
+            p.drawPixmap(exposedRect.adjusted(-1, -1, 1, 1),
+                         self.terrain,
+                         QRect(adjusted_startx-1, adjusted_starty-1, adjusted_width+1, adjusted_height+1))
+
         if self.zoom_factor > 1:
             ENTITY_SIZE = int(self.ENTITY_SIZE * (1 + self.zoom_factor/10.0))
         else:
@@ -251,6 +313,10 @@ class BWMapViewer(QWidget):
         drawentity = self.draw_entity
         polycache = self.polygon_cache
         toggle = self.visibility_toggle
+        draw_bound = event.rect().adjusted(-ENTITY_SIZE//2, -ENTITY_SIZE//2, ENTITY_SIZE//2, ENTITY_SIZE//2)
+        #contains = draw_bound.contains
+        startx, starty = draw_bound.topLeft().x(), draw_bound.topLeft().y()
+        endx, endy = startx+draw_bound.width(), starty+draw_bound.height()
         for entity, data in self.entities.items():
             x, y, entitytype, metadata = data
             x *= zf
@@ -287,7 +353,10 @@ class BWMapViewer(QWidget):
                     pen.setWidth(origwidth)
                     p.setPen(pen)
                 else:
-                    drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
+                    #if True:#contains(x, y):
+                    #if True:
+                    if x >= startx and y >= starty and x <= endx and y <= endy:
+                        drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
 
         # Draw the currently selected entity last so it is always above all other entities.
         if self.current_entity is not None:
