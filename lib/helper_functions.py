@@ -1,6 +1,7 @@
 import traceback
 import struct
-from math import radians, atan2, degrees, sin, cos
+import os
+from math import radians, atan2, degrees, sin, cos, sqrt
 
 from PyQt5.QtGui import QPicture, QPainter, QImage, QColor, QPixmap
 
@@ -201,6 +202,29 @@ def get_type(typename):
     else:
         return "b"
 
+def make_gradient(start, end, step=1, max=None):
+    r1, g1, b1 = start
+    r2, g2, b2 = end
+
+    diff_r, diff_g, diff_b = r2-r1, g2-g1, b2-b1
+    norm = sqrt(diff_r**2 + diff_g**2 + diff_b**2)
+    norm_r, norm_g, norm_b = diff_r/norm, diff_g/norm, diff_b/norm
+
+    gradient = []
+    gradient.append((int(r1), int(g1), int(b1)))
+
+    if max is not None:
+        step = int((r2-r1)/norm_r)//max
+
+    #curr_r, curr_g, curr_b = r1, g1, b1
+    for i in range(0, int((r2-r1)/norm_r), step):
+        curr_r = r1+i*norm_r
+        curr_g = g1+i*norm_g
+        curr_b = b1+i*norm_b
+        gradient.append((int(curr_r), int(curr_g), int(curr_b)))
+    gradient.append((int(r2), int(g2), int(b2)))
+    return gradient
+
 
 def parse_terrain_to_image(terrainfile):
     # In BWii the entry at position 1 is not KNHC, but something else that needs to be skipped
@@ -214,6 +238,28 @@ def parse_terrain_to_image(terrainfile):
     tilemap = terrainfile.entries[3+off]
     #tilemapdata = bytes(tilemap.data)
     pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
+
+    #colortransition = QImage(os.path.join("lib", "colors_terrainview.png"), "PNG")
+    colors = []
+    #for i in range(colortransition.width()):
+    #    colors.append(colortransition.pixel(i, 0))
+    for coltrans in [
+        ((106, 199, 242), (190, 226, 241), 5),
+        ((190, 226, 241), (147,182,95), 5),
+        ((147,182,95), (249, 239, 160), 5),
+        ((249, 239, 160), (214, 127, 70), 5),
+        ((214, 127, 70), (119, 68, 39), 5),
+        ((119, 68, 39), (80, 80, 80), 5),
+        (((80, 80, 80), (255, 255, 255), 5))]:
+
+        start, end, repeat = coltrans
+        for color in make_gradient(start, end):
+            for i in range(repeat):
+                colors.append(color)
+        #colors.extend([make_gradient(start, end))
+
+
+
     #pic = QPixmap(64*4*4, 64*4*4)
     p = QPainter()
     p.begin(pic)
@@ -240,7 +286,7 @@ def parse_terrain_to_image(terrainfile):
                                 #print("do stuff", (y*64+x)*4)
                                 height = struct.unpack(">H", single_tile[point_offset*2:(point_offset+1)*2])[0]
                                 pen = p.pen()
-                                if height > biggestheight:
+                                """if height > biggestheight:
                                     biggestheight = height
                                 if height < lowest:
                                     lowest = height
@@ -248,15 +294,22 @@ def parse_terrain_to_image(terrainfile):
                                     heights.append(height)
                                 if height >= 0x4FF:
                                     height -= 0x4FF
-                                    pen.setColor(QColor((height>>2)+50, (height>>2)+50, (height>>2)+50))
+                                    pen.setColor(QColor(((height>>2)+50)&0xFF, ((height>>2)+50)&0xFF, ((height>>2)+50)&0xFF))
                                 elif height >= 0x3F0:
                                     height -= 0x3F0
-                                    pen.setColor(QColor((height>>2)+90, (height>>2)+30, (height>>2)+30))
+                                    pen.setColor(QColor(((height>>2)+90)&0xFF, ((height>>2)+30)&0xFF, ((height>>2)+30)&0xFF))
                                 elif height >= 0x1FF:
                                     height -= 0x1FF
-                                    pen.setColor(QColor(0, (height>>2)+30, 0))
+                                    pen.setColor(QColor(0, ((height>>2)+30)&0xFF, 0))
                                 else:
-                                    pen.setColor(QColor(0, 0, (height>>2)+30))
+                                    pen.setColor(QColor(0, 0, ((height>>2)+30)&0xFF))"""
+                                if height >= len(colors):
+
+                                    print("oops, color out of bounds:", height, len(colors))
+                                    height = len(colors)-1
+
+                                r, g, b = colors[height]
+                                pen.setColor(QColor(r, g, b))
                                 #pen.setColor(QColor(height>>8, height&0xFF, height&0xFF))
                                 p.setPen(pen)
                                 p.drawPoint(x*16+ix*4+iix, y*16+iy*4+iiy)
