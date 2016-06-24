@@ -32,7 +32,7 @@ from lib.helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
                                   bw_coords_to_image_coords, image_coords_to_bw_coords,
                                   entity_get_army, entity_get_icon_type, entity_get_model,
                                   object_set_position, object_get_position, get_position_attribute, get_type,
-                                  parse_terrain_to_image)
+                                  parse_terrain_to_image, get_water_height)
 
 
 class EditorMainWindow(QMainWindow):
@@ -422,7 +422,7 @@ class EditorMainWindow(QMainWindow):
                         print("error", error)
                         traceback.print_exc()
         except Exception as er:
-            print("errrorrr", error)
+            print("errrorrr", er)
             traceback.print_exc()
         print("loaded")
 
@@ -650,7 +650,12 @@ class EditorMainWindow(QMainWindow):
                 with open(filepath, "rb") as f:
                     try:
                         terrain = BWArchiveBase(f)
-                        image = parse_terrain_to_image(terrain)
+                        if self.level is not None:
+                            waterheight = get_water_height(self.level)
+                        else:
+                            waterheight = None
+
+                        image = parse_terrain_to_image(terrain, waterheight)
                         self.bw_map_screen.set_terrain(image)
                     except:
                         traceback.print_exc()

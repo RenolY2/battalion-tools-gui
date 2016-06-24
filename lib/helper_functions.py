@@ -226,7 +226,15 @@ def make_gradient(start, end, step=1, max=None):
     return gradient
 
 
-def parse_terrain_to_image(terrainfile):
+def get_water_height(bw_level):
+    for objid, obj in bw_level.obj_map.items():
+        if obj.type == "cRenderParams":
+            print("Found render params", obj.name)
+            return float(obj.get_attr_value("mWaterHeight"))
+    print("did not find render params :(")
+    return None
+
+def parse_terrain_to_image(terrainfile, waterheight=None):
     # In BWii the entry at position 1 is not KNHC, but something else that needs to be skipped
     if terrainfile.entries[1].name != b"KNHC":
         off = 1
@@ -241,25 +249,40 @@ def parse_terrain_to_image(terrainfile):
 
     #colortransition = QImage(os.path.join("lib", "colors_terrainview.png"), "PNG")
     colors = []
+
     #for i in range(colortransition.width()):
     #    colors.append(colortransition.pixel(i, 0))
     for coltrans in [
-        ((106, 199, 242), (190, 226, 241), 5),
-        ((190, 226, 241), (147,182,95), 5),
-        ((147,182,95), (249, 239, 160), 5),
-        ((249, 239, 160), (214, 127, 70), 5),
-        ((214, 127, 70), (119, 68, 39), 5),
-        ((119, 68, 39), (80, 80, 80), 5),
-        (((80, 80, 80), (255, 255, 255), 5))]:
+        ((106, 199, 242), (190, 226, 241), 3), # Ocean level
+        ((190, 226, 241), (120, 147, 78), 2), # Transition Ocean->Ground
+        ((120, 147, 78), (147,182,95), 5), # Ground level
+        ((147,182,95), (249, 239, 160), 5), # Higher areas, going into mountains, green to yellow
+        ((249, 239, 160), (214, 127, 70), 5), # Even higher, yellow to brown
+        ((214, 127, 70), (150, 93, 60), 6), # brown to dark brown #(119, 68, 39)
+        ((150, 93, 60), (130,130, 130), 6), # dark brown to grey, very high
+        (((130,130, 130), (255, 255, 255), 7))]: # grey to white, very very high
 
         start, end, repeat = coltrans
-        for color in make_gradient(start, end):
-            for i in range(repeat):
+        for i, color in enumerate(make_gradient(start, end)):
+            #if i % 2 == 0: continue
+            for j in range(repeat):
                 colors.append(color)
         #colors.extend([make_gradient(start, end))
 
+    """new = QImage(len(colors), 200, QImage.Format_ARGB32)
+    trans_painter = QPainter()
+    trans_painter.begin(new)
+    for i in range(len(colors)):
+        r, g, b = colors[i]
+        pen = trans_painter.pen()
+        pen.setColor(QColor(r, g, b))
+        trans_painter.setPen(pen)
+        for y in range(200):
+            trans_painter.drawPoint(i, y)
 
-
+    trans_painter.end()
+    result = new.save("transition.png", "PNG")
+    print("saved", result)"""
     #pic = QPixmap(64*4*4, 64*4*4)
     p = QPainter()
     p.begin(pic)
@@ -267,13 +290,19 @@ def parse_terrain_to_image(terrainfile):
     lowest = 0xFFFF
     print(len(tiles.data)/(180*16))
     heights = []
+    watercolor = (106, 152, 242)
+
+    lowest_values = {}
+    total_lowest_color = None
+
     for x in range(64):
         for y in range(64):
             a, b, offset = struct.unpack(">BBH", tilemap.data[(y*64+x)*4:(y*64+x+1)*4])
             #print(a,b,offset)
             if b == 1:
                 tiles_data = tiles.data[180*16*offset:180*16*(offset+1)]
-
+                lowest = 0xFFFF
+                lowest_color = None
                 for ix in range(4):
                     for iy in range(4):
                         coord_offset = iy*4+ix
@@ -303,24 +332,86 @@ def parse_terrain_to_image(terrainfile):
                                     pen.setColor(QColor(0, ((height>>2)+30)&0xFF, 0))
                                 else:
                                     pen.setColor(QColor(0, 0, ((height>>2)+30)&0xFF))"""
+
+
                                 if height >= len(colors):
 
                                     print("oops, color out of bounds:", height, len(colors))
                                     height = len(colors)-1
 
                                 r, g, b = colors[height]
+                                if waterheight is not None and height <= waterheight*16:
+                                    r = (r+watercolor[0]) // 2
+                                    g = (r+watercolor[1]) // 2
+                                    b = (b+watercolor[2]) // 2
+                                    #r, g, b = watercolor
+                                if height < lowest: #and height > 0:
+                                    lowest = height
+                                    lowest_color = (r, g, b)
+                                    total_lowest_color = (r, g, b)
                                 pen.setColor(QColor(r, g, b))
+
                                 #pen.setColor(QColor(height>>8, height&0xFF, height&0xFF))
                                 p.setPen(pen)
                                 p.drawPoint(x*16+ix*4+iix, y*16+iy*4+iiy)
+                lowest_values[(x,y)] = lowest_color
     p.end()
+
+
     print(pic.size().height(), pic.size().width())
     print(biggestheight, hex(biggestheight))
     print(lowest, hex(lowest))
     heights.sort()
     print(heights)
+
+    finalimage = QImage(pic.width(), pic.height(), QImage.Format_ARGB32)
+    p.begin(finalimage)
+
+    #common_lowest_values =
+    if waterheight is not None:
+        """neighbours = {}
+        for x in range(64):
+            for y in range(64):
+
+                if (x,y) in lowest_values:
+
+                    for i in range(-1, 1+1):
+                        for j in range(-1, 1+1):
+
+                            if (x+i, y+j) not in lowest_values:
+                                if (x+i, y+j) not in neighbours:
+                                    neighbours[(x+i, y+j)] = [lowest_values[(x,y)]]
+                                else:
+                                    neighbours[((x+i, y+j))].append(lowest_values[(x,y)])
+
+        all_lowest_values = []
+        for pos, values in neighbours.items():
+            all_lowest_values.extend(values)
+            r, g, b = values[0]
+            if len(values) > 1:
+                for r2, g2, b2 in values[1:]:
+                    r = (r+r2)//2
+                    g = (g+g2)//2
+                    b = (b+b2)//2
+            current = 0#sum(values) // len(values)
+            x,y = pos
+            #r, g, b = colors[current]
+
+
+        #all_lowest = sum(all_lowest_values) // len(all_lowest_values)
+
+        #watercolor = (106, 152, 242) #colors[0x4F]
+        color = colors[lowest]
+        print("LOWEST IS", lowest)
+        print(neighbours)
+        r = (color[0]+watercolor[0]) // 2
+        g = (color[1]+watercolor[1]) // 2
+        b = (color[2]+watercolor[2]) // 2"""
+        p.fillRect(0, 0, 64*64*4, 64*64*4, QColor(total_lowest_color[0], total_lowest_color[1], total_lowest_color[2]))
+    p.drawImage(0, 0, pic)
+    p.end()
     """p.begin(self.terrainview)
     p.drawImage(0, 0, pic)
     p.end()"""
 
-    return pic.mirrored(False, True)
+    return finalimage.mirrored(False, True)#pic.mirrored(False, True)
