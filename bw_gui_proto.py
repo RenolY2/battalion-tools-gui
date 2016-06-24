@@ -75,6 +75,7 @@ class EditorMainWindow(QMainWindow):
         self.bw_map_screen.entity_clicked.connect(self.entity_position)
         self.bw_map_screen.mouse_dragged.connect(self.mouse_move)
         self.bw_map_screen.mouse_released.connect(self.mouse_release)
+        self.bw_map_screen.mouse_wheel.connect(self.mouse_wheel_scroll_zoom)
 
 
         status = self.statusbar
@@ -570,7 +571,7 @@ class EditorMainWindow(QMainWindow):
             except:
                 traceback.print_exc()
 
-    def zoom_out(self):
+    def zoom_out(self, noslider=False):
 
         horizbar = self.scrollArea.horizontalScrollBar()
         vertbar = self.scrollArea.verticalScrollBar()
@@ -592,13 +593,15 @@ class EditorMainWindow(QMainWindow):
         zf = self.bw_map_screen.zoom_factor
         self.bw_map_screen.zoom(calc_zoom_out_factor(zf))#diff)
 
+        #
+        if not noslider:
+            horizbar.setSliderPosition(horizbar.maximum()*widthratio)
+            vertbar.setSliderPosition(vertbar.maximum()*heightratio)
+            self.bw_map_screen.update()
+
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
-        horizbar.setSliderPosition(horizbar.maximum()*widthratio)
-        vertbar.setSliderPosition(vertbar.maximum()*heightratio)
-        self.bw_map_screen.update()
 
-
-    def zoom_in(self):
+    def zoom_in(self, noslider=False):
         horizbar = self.scrollArea.horizontalScrollBar()
         vertbar = self.scrollArea.verticalScrollBar()
 
@@ -615,12 +618,41 @@ class EditorMainWindow(QMainWindow):
         zf = self.bw_map_screen.zoom_factor
         self.bw_map_screen.zoom(calc_zoom_in_factor(zf))#zf)
 
-        self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
+        #
 
         print("wedidit?")
-        horizbar.setSliderPosition(horizbar.maximum()*widthratio)
-        vertbar.setSliderPosition(vertbar.maximum()*heightratio)
-        self.bw_map_screen.update()
+        if not noslider:
+            horizbar.setSliderPosition(horizbar.maximum()*widthratio)
+            vertbar.setSliderPosition(vertbar.maximum()*heightratio)
+            self.bw_map_screen.update()
+
+        self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
+
+    @catch_exception
+    def mouse_wheel_scroll_zoom(self, wheel_event):
+        print("scrolling", wheel_event)
+        print("Scroll", wheel_event.x(), wheel_event.y(), wheel_event.angleDelta().y())#, wheel_event.delta())
+
+        wheel_delta = wheel_event.angleDelta().y()
+        zf = self.bw_map_screen.zoom_factor
+        norm_x = wheel_event.x()/zf
+        norm_y = wheel_event.y()/zf
+        if wheel_delta > 0:
+            if zf <= 10:
+                self.zoom_in(True)
+
+                zf = self.bw_map_screen.zoom_factor
+
+                xmargin = self.scrollArea.viewport().width()//2 - 200
+                ymargin = self.scrollArea.viewport().height()//2 - 200
+                self.scrollArea.ensureVisible(norm_x*zf, norm_y*zf, xmargin, ymargin)
+                self.bw_map_screen.update()
+            else:
+                self.zoom_in()
+        elif wheel_delta < 0:
+            self.zoom_out()
+
+
 
     def action_lineedit_changeangle(self):
         if not self.resetting and self.bw_map_screen.current_entity is not None:

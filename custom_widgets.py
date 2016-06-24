@@ -5,7 +5,7 @@ from timeit import default_timer
 from copy import copy
 from math import sin, cos, atan2, radians
 
-from PyQt5.QtGui import QMouseEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap
+from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
                             QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
 from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
@@ -59,7 +59,7 @@ class BWMapViewer(QWidget):
     entity_clicked = pyqtSignal(QMouseEvent, str)
     mouse_dragged = pyqtSignal(QMouseEvent)
     mouse_released = pyqtSignal(QMouseEvent)
-
+    mouse_wheel = pyqtSignal(QWheelEvent)
     ENTITY_SIZE = ENTITY_SIZE
 
 
@@ -181,7 +181,7 @@ class BWMapViewer(QWidget):
             self.setMinimumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
             self.setMaximumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
 
-            self.terrain_buffer = QImage()
+            #self.terrain_buffer = QImage()
 
             """if self.terrain is not None:
                 if self.terrain_scaled is None:
@@ -432,6 +432,9 @@ class BWMapViewer(QWidget):
 
     def mouseReleaseEvent(self, event):
         self.mouse_released.emit(event)
+
+    def wheelEvent(self, event):
+        self.mouse_wheel.emit(event)
 
 class MenuDontClose(QMenu):
     def mouseReleaseEvent(self, e):
