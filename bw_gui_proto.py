@@ -53,6 +53,7 @@ class EditorMainWindow(QMainWindow):
         self.last_x = None
         self.last_y = None
         self.dragged_time = None
+        self.deleting_item = False # Hack for preventing focusing on next item after deleting the previous one
 
         self.moving = False
 
@@ -348,12 +349,6 @@ class EditorMainWindow(QMainWindow):
             if current is not None and current.xml_ref in self.level.obj_map:
                 self.set_entity_text(current.xml_ref)
                 self.bw_map_screen.choose_entity(current.xml_ref)
-
-                posx, posy, typename = self.bw_map_screen.entities[current.xml_ref]
-                zf = self.bw_map_screen.zoom_factor
-
-                self.scrollArea.ensureVisible(posx*zf, posy*zf,
-                                              xMargin=int(50*zf), yMargin=int(50*zf))
             elif current is not None:
                 self.statusbar.showMessage("No such entity: {0}".format(current.xml_ref), 1000*2)
         except:
@@ -466,9 +461,12 @@ class EditorMainWindow(QMainWindow):
         if current_entity is not None:
             try:
                 # Remove the entity from the map, the list widget and the level data
+                self.deleting_item = True
                 pos = self.get_entity_item_pos(current_entity)
                 item = self.entity_list_widget.takeItem(pos)
                 assert item.xml_ref == current_entity
+                #self.entity_list_widget.clearSelection()
+                self.entity_list_widget.clearFocus()
                 self.entity_list_widget.removeItemWidget(item)
                 self.level.remove_object(current_entity)
                 self.bw_map_screen.remove_entity(current_entity)
@@ -562,10 +560,13 @@ class EditorMainWindow(QMainWindow):
             posx, posy, typename, metadata = self.bw_map_screen.entities[current.xml_ref]
             zf = self.bw_map_screen.zoom_factor
             try:
-                x_margin = min(100, 50*zf)
-                y_margin = min(100, 50*zf)
-                self.scrollArea.ensureVisible(posx*zf, posy*zf,
-                                              xMargin=x_margin, yMargin=y_margin)
+                if not self.deleting_item:
+                    x_margin = min(100, 50*zf)
+                    y_margin = min(100, 50*zf)
+                    self.scrollArea.ensureVisible(posx*zf, posy*zf,
+                                                  xMargin=x_margin, yMargin=y_margin)
+                else:
+                    self.deleting_item = False
             except:
                 traceback.print_exc()
 
@@ -590,13 +591,12 @@ class EditorMainWindow(QMainWindow):
         #diff = oldzf - self.bw_map_screen.zoom_factor
         zf = self.bw_map_screen.zoom_factor
         self.bw_map_screen.zoom(calc_zoom_out_factor(zf))#diff)
-        self.bw_map_screen.update()
-
 
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
-        vertbar.maximum()
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
+        self.bw_map_screen.update()
+
 
     def zoom_in(self):
         horizbar = self.scrollArea.horizontalScrollBar()
@@ -614,12 +614,13 @@ class EditorMainWindow(QMainWindow):
 
         zf = self.bw_map_screen.zoom_factor
         self.bw_map_screen.zoom(calc_zoom_in_factor(zf))#zf)
-        self.bw_map_screen.update()
+
         self.statusbar.showMessage("Zoom: {0}x".format(self.bw_map_screen.zoom_factor))
 
         print("wedidit?")
         horizbar.setSliderPosition(horizbar.maximum()*widthratio)
         vertbar.setSliderPosition(vertbar.maximum()*heightratio)
+        self.bw_map_screen.update()
 
     def action_lineedit_changeangle(self):
         if not self.resetting and self.bw_map_screen.current_entity is not None:
