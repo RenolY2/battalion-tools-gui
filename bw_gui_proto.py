@@ -25,7 +25,9 @@ from res_tools.bw_archive_base import BWArchiveBase
 
 from lib.bw_read_xml import BattWarsLevel, BattWarsObject
 from custom_widgets import (BWEntityEntry, BWEntityListWidget, BWMapViewer, BWPassengerWindow, BWEntityXMLEditor, MenuDontClose,
-                            catch_exception)
+                            catch_exception,
+                            SHOW_TERRAIN_LIGHT, SHOW_TERRAIN_NO_TERRAIN, SHOW_TERRAIN_REGULAR)
+
 
 from lib.helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
                                   get_default_path, set_default_path, update_mapscreen,
@@ -688,8 +690,8 @@ class EditorMainWindow(QMainWindow):
                         else:
                             waterheight = None
 
-                        image = parse_terrain_to_image(terrain, waterheight)
-                        self.bw_map_screen.set_terrain(image)
+                        image, light_image = parse_terrain_to_image(terrain, waterheight)
+                        self.bw_map_screen.set_terrain(image, light_image)
                     except:
                         traceback.print_exc()
         except:
@@ -832,6 +834,7 @@ class EditorMainWindow(QMainWindow):
         self.visibility_menu.setObjectName("visibility")
 
 
+
         #self.visibility_menu.addAction(self.toggle_action)
         self.visibility_actions = []
 
@@ -841,6 +844,8 @@ class EditorMainWindow(QMainWindow):
         self.terrain_load_action = QAction("Load Terrain", self)
         self.terrain_load_action.triggered.connect(self.button_terrain_load_action)
         self.terrain_menu.addAction(self.terrain_load_action)
+        self.terrain_display_actions = []
+        self.setup_terrain_display_toggles()
 
         #self.menuLoad_2 = QMenu(self.menubar)
         #self.menuLoad_2.setObjectName("menuLoad_2")
@@ -855,7 +860,45 @@ class EditorMainWindow(QMainWindow):
         self.retranslateUi(MainWindow)
         QMetaObject.connectSlotsByName(MainWindow)
 
-    def make_function(self, objtype):
+
+    def make_terrain_toggle(self, show_mode):
+        def terraintoggle(toggled):
+            print("I am", show_mode, "and I was pressed")
+            if toggled is True:
+                for action, toggle, mode in self.terrain_display_actions:
+                    if mode != show_mode:
+                        action.setChecked(False)
+                self.bw_map_screen.set_show_terrain_mode(show_mode)
+            elif toggled is False:
+                self.bw_map_screen.set_show_terrain_mode(SHOW_TERRAIN_NO_TERRAIN)
+            else:
+                print("This shouldn't be possible", toggled, type(toggled))
+            self.bw_map_screen.update()
+        return terraintoggle
+
+    def setup_terrain_display_toggles(self):
+        for mode, name in ((SHOW_TERRAIN_REGULAR, "Show Heightmap"),
+                            (SHOW_TERRAIN_LIGHT, "Show Lightmap")):
+            toggle = self.make_terrain_toggle(mode)
+            toggle_action = QAction(name, self)
+            toggle_action.setCheckable(True)
+            if mode == SHOW_TERRAIN_REGULAR:
+                toggle_action.setChecked(True)
+            else:
+                toggle_action.setChecked(False)
+            toggle_action.triggered.connect(toggle)
+            self.terrain_menu.addAction(toggle_action)
+            self.terrain_display_actions.append((toggle_action, toggle, mode))
+
+    def clear_terrain_toggles(self):
+        try:
+            for action, func, mode in self.terrain_display_actions:
+                self.terrain_menu.removeAction(action)
+            self.terrain_display_actions = []
+        except:
+            traceback.print_exc()
+
+    def make_toggle_function(self, objtype):
         def toggle(toggled):
             print("i was pressed")
             my_type = copy(objtype)
@@ -867,7 +910,7 @@ class EditorMainWindow(QMainWindow):
     def setup_visibility_toggles(self):
         for objtype in sorted(self.level.objtypes_with_positions):
 
-            toggle = self.make_function(objtype)
+            toggle = self.make_toggle_function(objtype)
 
 
             toggle_action = QAction(copy(objtype), self)

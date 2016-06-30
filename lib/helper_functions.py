@@ -246,6 +246,7 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
     tilemap = terrainfile.entries[3+off]
     #tilemapdata = bytes(tilemap.data)
     pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
+    light_pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
 
     #colortransition = QImage(os.path.join("lib", "colors_terrainview.png"), "PNG")
     colors = []
@@ -286,6 +287,8 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
     #pic = QPixmap(64*4*4, 64*4*4)
     p = QPainter()
     p.begin(pic)
+    light_p = QPainter()
+    light_p.begin(light_pic)
     biggestheight = 0
     lowest = 0xFFFF
     print(len(tiles.data)/(180*16))
@@ -314,6 +317,10 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
                                 point_offset = iiy*4 + iix
                                 #print("do stuff", (y*64+x)*4)
                                 height = struct.unpack(">H", single_tile[point_offset*2:(point_offset+1)*2])[0]
+
+                                light_r, light_g, light_b, unused = struct.unpack("BBBB", single_tile[32+point_offset*4:32+(point_offset+1)*4])
+                                #blend_r, blend_g, blend_b, wat = struct.unpack("BBBB",
+                                #                                                     single_tile[4+32+64+point_offset*4:4+32+64+(point_offset+1)*4])
                                 pen = p.pen()
                                 """if height > biggestheight:
                                     biggestheight = height
@@ -350,12 +357,21 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
                                     lowest_color = (r, g, b)
                                     total_lowest_color = (r, g, b)
                                 pen.setColor(QColor(r, g, b))
+                                #pen.setColor(QColor(light_r, light_g, light_b))
+
+                                #pen.setColor(QColor(blend_r, blend_g, blend_b))
+                                #pen.setColor(QColor(blend_r, blend_g, blend_b))
 
                                 #pen.setColor(QColor(height>>8, height&0xFF, height&0xFF))
                                 p.setPen(pen)
                                 p.drawPoint(x*16+ix*4+iix, y*16+iy*4+iiy)
+                                pen.setColor(QColor(light_r, light_g, light_b))
+                                light_p.setPen(pen)
+                                light_p.drawPoint(x*16+ix*4+iix, y*16+iy*4+iiy)
+
                 lowest_values[(x,y)] = lowest_color
     p.end()
+    light_p.end()
 
 
     print(pic.size().height(), pic.size().width())
@@ -414,4 +430,4 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
     p.drawImage(0, 0, pic)
     p.end()"""
 
-    return finalimage.mirrored(False, True)#pic.mirrored(False, True)
+    return finalimage.mirrored(False, True), light_pic.mirrored(False, True)#pic.mirrored(False, True)

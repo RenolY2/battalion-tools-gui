@@ -32,6 +32,10 @@ DEFAULT_MAPZONE = QColor("grey")
 DEFAULT_SELECTED = QColor("red")
 DEFAULT_ANGLE_MARKER = QColor("blue")
 
+SHOW_TERRAIN_NO_TERRAIN = 0
+SHOW_TERRAIN_REGULAR = 1
+SHOW_TERRAIN_LIGHT = 2
+
 def catch_exception(func):
     def handle(*args, **kwargs):
         try:
@@ -96,6 +100,7 @@ class BWMapViewer(QWidget):
 
         self.p = QPainter()
         self.p2 = QPainter()
+        self.show_terrain_mode = SHOW_TERRAIN_REGULAR
 
 
     def set_visibility(self, visibility):
@@ -122,6 +127,7 @@ class BWMapViewer(QWidget):
 
         self.terrain = None
         self.terrain_scaled = QImage()
+        self.show_terrain_mode = SHOW_TERRAIN_REGULAR
 
     @property
     def zoom_factor(self):
@@ -131,6 +137,13 @@ class BWMapViewer(QWidget):
         self.current_entity = entityid
 
         self.update()
+
+    def set_show_terrain_mode(self, mode):
+        if mode not in (SHOW_TERRAIN_NO_TERRAIN, SHOW_TERRAIN_REGULAR, SHOW_TERRAIN_LIGHT):
+            raise RuntimeError("No such mode:", mode)
+        else:
+            print("Terrain mode was", self.show_terrain_mode, "will be set to", mode)
+            self.show_terrain_mode = mode
 
     def move_entity(self, entityid, x, y):
         # Update the position of an entity
@@ -249,12 +262,13 @@ class BWMapViewer(QWidget):
     def set_metadata(self, entityid, metadata):
         self.entities[entityid][3] = metadata
 
-    def set_terrain(self, terrain):
+    def set_terrain(self, terrain, light_image):
         self.terrain = QPixmap.fromImage(terrain)
+        self.light_terrain = QPixmap.fromImage(light_image)
         #self.terrain_scaled = self.terrain.scaled(self.height(), self.width())
 
 
-    #@catch_exception
+    @catch_exception
     def paintEvent(self, event):
         start = default_timer()
         #print("painting")
@@ -265,39 +279,33 @@ class BWMapViewer(QWidget):
         w = self.width()
         p.setBrush(QColor("white"))
         p.drawRect(0, 0, h-1, w-1)
-        if self.terrain is not None:
+        if (self.terrain is not None
+                and self.show_terrain_mode in (SHOW_TERRAIN_REGULAR, SHOW_TERRAIN_LIGHT)):
             #print("drawing image")
             #print(self.height(), self.width(), self.terrain.height(), self.terrain.width())
-            """exposedRect = event.rect()#p.matrix().inverted().mapRect(event.rect()).adjusted(-1, -1, 1, 1);
-            print(exposedRect.height(), exposedRect.width())
-            print(exposedRect.topLeft())
-            exp_rect_x = exposedRect.topLeft().x()
-            exp_rect_y = exposedRect.topLeft().y()
-            adjusted_startx = int(exp_rect_x / self.zoom_factor)//2
-            adjusted_starty = int(exp_rect_y / self.zoom_factor)//2
-            adjusted_width = int(exposedRect.width() / self.zoom_factor)//2
-            adjusted_height = int(exposedRect.height() / self.zoom_factor)//2
-            print("sizes", adjusted_height, adjusted_width, adjusted_startx, adjusted_starty)
 
-            terrain_part = self.terrain.copy(adjusted_startx, adjusted_starty, adjusted_width, adjusted_height)
-            scaled_terrain = terrain_part.scaled(exposedRect.width(), exposedRect.height())
-
-            #self.p2.begin(self.terrain_buffer)
-            #self.p2.drawImage(exposedRect.topLeft().x(), exposedRect.topLeft().y(), scaled_terrain)
-            p.drawImage(exp_rect_x, exp_rect_y, scaled_terrain)"""
             exposedRect = event.rect()
+
             exp_rect_x = exposedRect.topLeft().x()
             exp_rect_y = exposedRect.topLeft().y()
+            exp_rect_width = exposedRect.width()
+            exp_rect_height = exposedRect.height()
+
             adjusted_startx = (exp_rect_x / self.zoom_factor)/2
             adjusted_starty = (exp_rect_y / self.zoom_factor)/2
             adjusted_width = (exposedRect.width() / self.zoom_factor)/2
             adjusted_height = (exposedRect.height() / self.zoom_factor)/2
-            #self.p2.end()
-            #p.drawImage(0,0, self.terrain_buffer)
-            #p.drawImage(0, 0, self.terrain_scaled)
+
+            print(exp_rect_width, exp_rect_height, adjusted_width*2, adjusted_height*2)
+            terrain_image = None
+            if self.show_terrain_mode == SHOW_TERRAIN_REGULAR:
+                terrain_image = self.terrain
+            elif self.show_terrain_mode == SHOW_TERRAIN_LIGHT:
+                terrain_image = self.light_terrain
+
             p.drawPixmap(exposedRect.adjusted(-1, -1, 1, 1),
-                         self.terrain,
-                         QRect(adjusted_startx-1, adjusted_starty-1, adjusted_width+1, adjusted_height+1))
+                         terrain_image,
+                         QRect(adjusted_startx, adjusted_starty, adjusted_width, adjusted_height))
 
         if self.zoom_factor > 1:
             ENTITY_SIZE = int(self.ENTITY_SIZE * (1 + self.zoom_factor/10.0))
@@ -436,6 +444,7 @@ class BWMapViewer(QWidget):
     def wheelEvent(self, event):
         self.mouse_wheel.emit(event)
 
+
 class MenuDontClose(QMenu):
     def mouseReleaseEvent(self, e):
         try:
@@ -446,6 +455,7 @@ class MenuDontClose(QMenu):
                 QMenu.mouseReleaseEvent(self, e)
         except:
             traceback.print_exc()
+
 
 class BWEntityEntry(QListWidgetItem):
     def __init__(self, xml_ref, *args, **kwargs):
