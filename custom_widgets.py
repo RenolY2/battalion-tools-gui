@@ -4,6 +4,7 @@ import xml.etree.ElementTree as etree
 from timeit import default_timer
 from copy import copy
 from math import sin, cos, atan2, radians
+from itertools import chain
 
 from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
@@ -92,6 +93,7 @@ class BWMapViewer(QWidget):
         #self.entities = [(0,0, "abc")]
         self.entities = {}#{"abc": (0, 0)}
         self.current_entity = None
+        self.selected_entities = {}
         self.visibility_toggle = {}
 
         self.terrain = None
@@ -325,6 +327,7 @@ class BWMapViewer(QWidget):
         toggle = self.visibility_toggle
         draw_bound = event.rect().adjusted(-ENTITY_SIZE//2, -ENTITY_SIZE//2, ENTITY_SIZE//2, ENTITY_SIZE//2)
         #contains = draw_bound.contains
+        selected_entities = self.selected_entities
         startx, starty = draw_bound.topLeft().x(), draw_bound.topLeft().y()
         endx, endy = startx+draw_bound.width(), starty+draw_bound.height()
         for entity, data in self.entities.items():
@@ -343,7 +346,7 @@ class BWMapViewer(QWidget):
                 p.setBrush(color)
                 #p.setPen(QColor(color))
                 last_color = color
-            if current_entity != entity:
+            if current_entity != entity and entity not in selected_entities:
                 #print(entitytype)
                 if entitytype == "cMapZone":
                     mapzonetype = metadata["zonetype"]
@@ -369,28 +372,31 @@ class BWMapViewer(QWidget):
                         drawentity(p, x, y, ENTITY_SIZE, zf, entity, metadata)
 
         # Draw the currently selected entity last so it is always above all other entities.
-        if self.current_entity is not None:
-            x, y, entitytype, metadata = self.entities[self.current_entity]
+        for selected_entity in chain([self.current_entity], selected_entities.keys()):
+            if selected_entity is None:
+                continue
+            x, y, entitytype, metadata = self.entities[selected_entity]
             x *= zf
             y *= zf
 
             p.setBrush(QColor("red"))
 
             if entitytype == "cMapZone":
-                self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
+                self.draw_entity(p, x, y, ENTITY_SIZE, zf,selected_entity, metadata)
                 pen = p.pen()
                 pen.setColor(DEFAULT_SELECTED)
                 origwidth = pen.width()
                 pen.setWidth(8)
                 p.setPen(pen)
-                self.draw_box(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata, polycache)
+                self.draw_box(p, x, y, ENTITY_SIZE, zf, selected_entity, metadata, polycache)
                 pen.setColor(DEFAULT_ENTITY)
                 pen.setWidth(origwidth)
                 p.setPen(pen)
             else:
-                self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
+                self.draw_entity(p, x, y, ENTITY_SIZE, zf, selected_entity, metadata)
 
             p.setBrush(DEFAULT_ENTITY)
+
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
             startpoint = QPoint(*self.selectionbox_start)
             endpoint = QPoint(*self.selectionbox_end)
@@ -411,8 +417,28 @@ class BWMapViewer(QWidget):
 
     def set_selectionbox_start(self, start):
         self.selectionbox_start = start
+        self.selected_entities = {}
+
     def set_selectionbox_end(self, end):
         self.selectionbox_end = end
+
+        if self.selectionbox_start is not None and self.selectionbox_end is not None:
+            selected = []
+            self.selected_entities = {}
+            startx = min(self.selectionbox_start[0], self.selectionbox_end[0])
+            starty = min(self.selectionbox_start[1], self.selectionbox_end[1])
+            endx = max(self.selectionbox_start[0], self.selectionbox_end[0])
+            endy = max(self.selectionbox_start[1], self.selectionbox_end[1])
+
+            for entity, data in self.entities.items():
+                x, y, entitytype, metadata = data
+                x *= self.zoom_factor
+                y *= self.zoom_factor
+                if entitytype not in self.visibility_toggle or self.visibility_toggle[entitytype] is True:
+                    #print(startx, x, endx)
+                    #print(starty, y, endy)
+                    if startx < x < endx and starty < y < endy:
+                        self.selected_entities[entity] = True
 
     def clear_selection_box(self):
         self.selectionbox_end = None
