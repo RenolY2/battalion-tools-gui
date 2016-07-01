@@ -18,6 +18,7 @@ from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QLineEdit)
+from PyQt5.QtGui import QMouseEvent
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
@@ -441,6 +442,7 @@ class EditorMainWindow(QMainWindow):
 
     def entity_position(self, event, entity):
         try:
+
             print("got entity:",entity, self.bw_map_screen.entities[entity][2])
             print(entity_get_model(self.level, entity))
             self.set_entity_text(entity)
@@ -487,23 +489,25 @@ class EditorMainWindow(QMainWindow):
         x = event.x()/self.bw_map_screen.zoom_factor
         y = event.y()/self.bw_map_screen.zoom_factor
 
-        if not self.moving:
-            pass
-        else:
-            if self.bw_map_screen.current_entity is not None:
-                newx, newy = image_coords_to_bw_coords(x, y)
-                print("Old position:", object_get_position(self.level, self.bw_map_screen.current_entity))
-                object_set_position(self.level, self.bw_map_screen.current_entity,
-                                    newx, newy)
-                self.bw_map_screen.move_entity(self.bw_map_screen.current_entity,
-                                               x, y)
-                self.set_entity_text(self.bw_map_screen.current_entity)
+        if event.buttons() == QtCore.Qt.LeftButton:
 
-                update_mapscreen(self.bw_map_screen, self.level.obj_map[self.bw_map_screen.current_entity])
-                print("New position:", object_get_position(self.level, self.bw_map_screen.current_entity))
+            if not self.moving:
+                self.bw_map_screen.set_selectionbox_start((event.x(), event.y()))
+            else:
+                if self.bw_map_screen.current_entity is not None:
+                    newx, newy = image_coords_to_bw_coords(x, y)
+                    print("Old position:", object_get_position(self.level, self.bw_map_screen.current_entity))
+                    object_set_position(self.level, self.bw_map_screen.current_entity,
+                                        newx, newy)
+                    self.bw_map_screen.move_entity(self.bw_map_screen.current_entity,
+                                                   x, y)
+                    self.set_entity_text(self.bw_map_screen.current_entity)
+
+                    update_mapscreen(self.bw_map_screen, self.level.obj_map[self.bw_map_screen.current_entity])
+                    print("New position:", object_get_position(self.level, self.bw_map_screen.current_entity))
 
 
-        self.bw_map_screen.update()
+            self.bw_map_screen.update()
 
     def mouse_move(self, event):
         x, y = image_coords_to_bw_coords(event.x()/self.bw_map_screen.zoom_factor,
@@ -511,18 +515,26 @@ class EditorMainWindow(QMainWindow):
         self.statusbar.showMessage("x: {0} y: {1}".format(round(x, 5), round(y, 5)))
 
         if self.dragging and default_timer() - self.dragged_time > 0.1:
-            delta_x = (event.x()-self.last_x)/8
-            delta_y = (event.y()-self.last_y)/8
-            #print("hi",event.x(), event.y())
+            if event.buttons() == QtCore.Qt.RightButton:
+                delta_x = (event.x()-self.last_x)/8
+                delta_y = (event.y()-self.last_y)/8
+                #print("hi",event.x(), event.y())
 
-            vertbar = self.scrollArea.verticalScrollBar()
-            horizbar = self.scrollArea.horizontalScrollBar()
+                vertbar = self.scrollArea.verticalScrollBar()
+                horizbar = self.scrollArea.horizontalScrollBar()
 
-            vertbar.setSliderPosition(vertbar.value()-delta_y)
-            horizbar.setSliderPosition(horizbar.value()-delta_x)
+                vertbar.setSliderPosition(vertbar.value()-delta_y)
+                horizbar.setSliderPosition(horizbar.value()-delta_x)
+
+            elif event.buttons() == QtCore.Qt.LeftButton:
+                self.bw_map_screen.set_selectionbox_end((event.x(), event.y()))
+                self.bw_map_screen.update()
 
     def mouse_release(self, event):
         self.dragging = False
+        if self.bw_map_screen.selectionbox_end is not None:
+            self.bw_map_screen.clear_selection_box()
+            self.bw_map_screen.update()
 
     def set_entity_text(self, entityid):
         try:
@@ -702,6 +714,7 @@ class EditorMainWindow(QMainWindow):
         MainWindow.resize(820, 760)
         MainWindow.setMinimumSize(QSize(720, 560))
         MainWindow.setWindowTitle("BW-MapEdit")
+        #MainWindow.setWindowTitle("Nep-Nep")
 
 
         self.centralwidget = QWidget(MainWindow)

@@ -102,6 +102,8 @@ class BWMapViewer(QWidget):
         self.p2 = QPainter()
         self.show_terrain_mode = SHOW_TERRAIN_REGULAR
 
+        self.selectionbox_start = None
+        self.selectionbox_end = None
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
@@ -389,11 +391,32 @@ class BWMapViewer(QWidget):
                 self.draw_entity(p, x, y, ENTITY_SIZE, zf, self.current_entity, metadata)
 
             p.setBrush(DEFAULT_ENTITY)
+        if self.selectionbox_start is not None and self.selectionbox_end is not None:
+            startpoint = QPoint(*self.selectionbox_start)
+            endpoint = QPoint(*self.selectionbox_end)
 
+            corner_horizontal = QPoint(self.selectionbox_end[0], self.selectionbox_start[1])
+            corner_vertical = QPoint(self.selectionbox_start[0], self.selectionbox_end[1])
+            selectionbox_polygon = QPolygon([startpoint, corner_horizontal, endpoint, corner_vertical,
+                                            startpoint])
+            p.drawPolyline(selectionbox_polygon)
         p.end()
         end = default_timer()
 
         print("time taken:", end-start, "sec")
+
+    def set_selection_box(self, start, end):
+        self.selectionbox_start = start
+        self.selectionbox_end = end
+
+    def set_selectionbox_start(self, start):
+        self.selectionbox_start = start
+    def set_selectionbox_end(self, end):
+        self.selectionbox_end = end
+
+    def clear_selection_box(self):
+        self.selectionbox_end = None
+        self.selectionbox_start = None
 
     def mousePressEvent(self, event):
         #x,y = event.localPos()
@@ -409,29 +432,32 @@ class BWMapViewer(QWidget):
         else:
             ENTITY_SIZE = self.ENTITY_SIZE
 
-        entities_hit = []
-        toggle = self.visibility_toggle
-        for entity, data in self.entities.items():
-            x, y, entitytype, metadata = data
-            x *= self.zoom_factor
-            y *= self.zoom_factor
-            if entitytype in toggle and toggle[entitytype] is False:
-                continue
-            if ((x + ENTITY_SIZE//2) > event_x > (x - ENTITY_SIZE//2)
-                and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
-                #hit = True
-                entities_hit.append(entity)
+        if event.buttons() == Qt.LeftButton:
+            entities_hit = []
+            toggle = self.visibility_toggle
+            for entity, data in self.entities.items():
+                x, y, entitytype, metadata = data
+                x *= self.zoom_factor
+                y *= self.zoom_factor
+                if entitytype in toggle and toggle[entitytype] is False:
+                    continue
+                if ((x + ENTITY_SIZE//2) > event_x > (x - ENTITY_SIZE//2)
+                    and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
+                    #hit = True
+                    entities_hit.append(entity)
 
-        print("we got it")
-        if len(entities_hit) > 0:
-            if self.next_selected_index > (len(entities_hit) - 1):
-                self.next_selected_index = 0
-            entity = entities_hit[self.next_selected_index]
+            print("we got it")
+            if len(entities_hit) > 0:
+                if self.next_selected_index > (len(entities_hit) - 1):
+                    self.next_selected_index = 0
+                entity = entities_hit[self.next_selected_index]
 
-            search_end = default_timer()
-            print("time for search:", search_end-search_start, "sec")
-            self.next_selected_index = (self.next_selected_index+1) % len(entities_hit)
-            self.entity_clicked.emit(event, entity)
+                search_end = default_timer()
+                print("time for search:", search_end-search_start, "sec")
+                self.next_selected_index = (self.next_selected_index+1) % len(entities_hit)
+                self.entity_clicked.emit(event, entity)
+            else:
+                self.mouse_clicked.emit(event)
         else:
             self.mouse_clicked.emit(event)
 
