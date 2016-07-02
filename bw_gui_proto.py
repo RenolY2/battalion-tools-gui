@@ -218,68 +218,73 @@ class EditorMainWindow(QMainWindow):
             traceback.print_exc()
 
     def action_clone_entity(self):
-        currentity = self.bw_map_screen.current_entity
+        entities = []
+        if self.bw_map_screen.current_entity is not None:
+            entities.append(self.bw_map_screen.current_entity)
+        elif len(self.bw_map_screen.selected_entities) > 0:
+            entities.extend(self.bw_map_screen.selected_entities.keys())
 
-        if currentity is not None:
-            obj = self.level.obj_map[currentity]
-            xml_node = deepcopy(obj._xml_node)
-            try:
-                cloned_id = self.level.generate_unique_id(currentity)
-                xml_node.set("id", cloned_id)
-                self.level.add_object(xml_node)
+        if len(entities) > 0:
+            for entity in entities:
+                obj = self.level.obj_map[entity]
+                xml_node = deepcopy(obj._xml_node)
+                try:
+                    cloned_id = self.level.generate_unique_id(entity)
+                    xml_node.set("id", cloned_id)
+                    self.level.add_object(xml_node)
 
-                bw_x, bw_y, angle = object_get_position(self.level, cloned_id)
-                print("CURRENT_POSITION", bw_x, bw_y)
-                x, y = bw_coords_to_image_coords(bw_x, bw_y)
-                print(bw_x, bw_y, (image_coords_to_bw_coords(x, y)))
+                    bw_x, bw_y, angle = object_get_position(self.level, cloned_id)
+                    x, y = bw_coords_to_image_coords(bw_x, bw_y)
 
-                self.add_item_sorted(cloned_id)
+                    self.add_item_sorted(cloned_id)
 
-                self.bw_map_screen.add_entity(x, y, cloned_id, obj.type)
-
-                #self.choose_entity(newid)
-                self.bw_map_screen.choose_entity(cloned_id)
-                self.set_entity_text(cloned_id)
-                print("CREATED:", cloned_id)
+                    self.bw_map_screen.add_entity(x, y, cloned_id, obj.type)
 
 
-                clonedobj = self.level.obj_map[cloned_id]
+                    #self.choose_entity(newid)
+                    #if len(entities) == 1:
+                    #    self.bw_map_screen.choose_entity(cloned_id)
+                    #    self.set_entity_text(cloned_id)
+                    print("CREATED:", cloned_id)
 
-                if clonedobj.has_attr("mPassenger"):
-                    print("COPYING PASSENGERS")
-                    orig_x = bw_x
-                    orig_y = bw_y
-                    passengers = clonedobj.get_attr_elements("mPassenger")
 
-                    passengers_added = []
+                    clonedobj = self.level.obj_map[cloned_id]
+                    update_mapscreen(self.bw_map_screen, clonedobj)
+                    if clonedobj.has_attr("mPassenger"):
+                        orig_x = bw_x
+                        orig_y = bw_y
+                        passengers = clonedobj.get_attr_elements("mPassenger")
 
-                    for i, passenger in enumerate(passengers):
-                        if passenger != "0":
-                            obj = self.level.obj_map[passenger]
-                            xml_node = deepcopy(obj._xml_node)
+                        passengers_added = []
 
-                            clonedpassenger_id = self.level.generate_unique_id(passenger)
-                            xml_node.set("id", clonedpassenger_id)
-                            print("orig passenger: {0}, new passenger: {1}, alreadyexists: {2}".format(
-                                passenger, clonedpassenger_id, clonedpassenger_id in self.level.obj_map
-                            ))
-                            print(type(passenger), type(clonedpassenger_id))
+                        for i, passenger in enumerate(passengers):
+                            if passenger != "0":
+                                obj = self.level.obj_map[passenger]
+                                xml_node = deepcopy(obj._xml_node)
 
-                            self.level.add_object(xml_node)
-                            #x, y = object_get_position(self.level, newid)
-                            x = orig_x + (i+1)*8
-                            y = orig_y + (i+1)*8
-                            print(orig_x, orig_y, x, y)
-                            object_set_position(self.level, clonedpassenger_id, x, y)
-                            x, y = bw_coords_to_image_coords(x, y)
+                                clonedpassenger_id = self.level.generate_unique_id(passenger)
+                                xml_node.set("id", clonedpassenger_id)
+                                #print("orig passenger: {0}, new passenger: {1}, alreadyexists: {2}".format(
+                                #    passenger, clonedpassenger_id, clonedpassenger_id in self.level.obj_map
+                                #))
+                                #print(type(passenger), type(clonedpassenger_id))
 
-                            self.add_item_sorted(clonedpassenger_id)
-                            self.bw_map_screen.add_entity(x, y, clonedpassenger_id, obj.type)
-                            passengers_added.append(passenger)
-                            clonedobj.set_attr_value("mPassenger", clonedpassenger_id, i)
-                    print("passengers added:", passengers_added)
-            except:
-                traceback.print_exc()
+                                self.level.add_object(xml_node)
+                                #x, y = object_get_position(self.level, newid)
+                                x = orig_x + (i+1)*8
+                                y = orig_y + (i+1)*8
+                                #print(orig_x, orig_y, x, y)
+                                object_set_position(self.level, clonedpassenger_id, x, y)
+                                x, y = bw_coords_to_image_coords(x, y)
+
+                                self.add_item_sorted(clonedpassenger_id)
+                                self.bw_map_screen.add_entity(x, y, clonedpassenger_id, obj.type)
+                                update_mapscreen(self.bw_map_screen, self.level.obj_map[clonedpassenger_id])
+                                passengers_added.append(passenger)
+                                clonedobj.set_attr_value("mPassenger", clonedpassenger_id, i)
+                        #print("passengers added:", passengers_added)
+                except:
+                    traceback.print_exc()
 
     def add_item_sorted(self, entity):
         max_count = self.entity_list_widget.count()
@@ -296,7 +301,7 @@ class EditorMainWindow(QMainWindow):
         for i in range(max_count):
             curritem = self.entity_list_widget.item(i)
             currobj = self.level.obj_map[curritem.xml_ref]
-            currstring = get_type(currobj.type)+currobj.type
+            currstring = get_type(currobj.type)+currobj.type+currobj.id
 
             # The list is already sorted, so if we find an item bigger than
             # the one we are inserting, we know the position we have to insert the item in.
