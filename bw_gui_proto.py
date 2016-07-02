@@ -480,14 +480,15 @@ class EditorMainWindow(QMainWindow):
                 traceback.print_exc()
                 raise
 
+    #@catch_exception
     def get_position(self, event):
         self.dragging = True
         self.last_x = event.x()
         self.last_y = event.y()
         self.dragged_time = default_timer()
 
-        x = event.x()/self.bw_map_screen.zoom_factor
-        y = event.y()/self.bw_map_screen.zoom_factor
+        mouse_x = event.x()/self.bw_map_screen.zoom_factor
+        mouse_y = event.y()/self.bw_map_screen.zoom_factor
 
         if event.buttons() == QtCore.Qt.LeftButton:
 
@@ -495,15 +496,55 @@ class EditorMainWindow(QMainWindow):
                 self.bw_map_screen.set_selectionbox_start((event.x(), event.y()))
             else:
                 if self.bw_map_screen.current_entity is not None:
-                    newx, newy = image_coords_to_bw_coords(x, y)
+                    newx, newy = image_coords_to_bw_coords(mouse_x, mouse_y)
                     object_set_position(self.level, self.bw_map_screen.current_entity,
                                         newx, newy)
                     self.bw_map_screen.move_entity(self.bw_map_screen.current_entity,
-                                                   x, y)
+                                                   mouse_x, mouse_y)
                     self.set_entity_text(self.bw_map_screen.current_entity)
 
                     update_mapscreen(self.bw_map_screen, self.level.obj_map[self.bw_map_screen.current_entity])
-                #elif len(self.bw_map_screen.selected_entities) > 0:
+
+                elif len(self.bw_map_screen.selected_entities) > 0:
+                    for entity in self.bw_map_screen.selected_entities:
+                        first_entity = entity
+                        break
+                    #first_entity = self.bw_map_screen.selected_entities.keys()[0]
+                    x, y, entitytype, metadata = self.bw_map_screen.entities[first_entity]
+                    startx = endx = x
+                    starty = endy = y
+
+                    for entity in self.bw_map_screen.selected_entities:
+                        x, y, dontneed, dontneed = self.bw_map_screen.entities[entity]
+                        if x < startx:
+                            startx = x
+                        if x > endx:
+                            endx = x
+                        if y < starty:
+                            starty = y
+                        if y > endy:
+                            endy = y
+                    middle_x = (startx+endx) / 2
+                    middle_y = (starty+endy) / 2
+
+                    delta_x = mouse_x - middle_x
+                    delta_y = mouse_y - middle_y
+
+                    for entity in self.bw_map_screen.selected_entities:
+                        x, y, dontneed, dontneed = self.bw_map_screen.entities[entity]
+
+                        newx, newy = image_coords_to_bw_coords(x+delta_x, y+delta_y)
+                        object_set_position(self.level, entity,
+                                            newx, newy)
+                        self.bw_map_screen.move_entity(entity,
+                                                       x+delta_x, y+delta_y)
+                        #self.set_entity_text(self.bw_map_screen.current_entity)
+
+                        update_mapscreen(self.bw_map_screen, self.level.obj_map[entity])
+
+
+
+
 
 
             self.bw_map_screen.update()
