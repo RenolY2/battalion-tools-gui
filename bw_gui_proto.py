@@ -496,7 +496,6 @@ class EditorMainWindow(QMainWindow):
             else:
                 if self.bw_map_screen.current_entity is not None:
                     newx, newy = image_coords_to_bw_coords(x, y)
-                    print("Old position:", object_get_position(self.level, self.bw_map_screen.current_entity))
                     object_set_position(self.level, self.bw_map_screen.current_entity,
                                         newx, newy)
                     self.bw_map_screen.move_entity(self.bw_map_screen.current_entity,
@@ -504,11 +503,12 @@ class EditorMainWindow(QMainWindow):
                     self.set_entity_text(self.bw_map_screen.current_entity)
 
                     update_mapscreen(self.bw_map_screen, self.level.obj_map[self.bw_map_screen.current_entity])
-                    print("New position:", object_get_position(self.level, self.bw_map_screen.current_entity))
+                #elif len(self.bw_map_screen.selected_entities) > 0:
 
 
             self.bw_map_screen.update()
 
+    @catch_exception
     def mouse_move(self, event):
         x, y = image_coords_to_bw_coords(event.x()/self.bw_map_screen.zoom_factor,
                                          event.y()/self.bw_map_screen.zoom_factor)
@@ -528,6 +528,9 @@ class EditorMainWindow(QMainWindow):
 
             elif event.buttons() == QtCore.Qt.LeftButton:
                 self.bw_map_screen.set_selectionbox_end((event.x(), event.y()))
+                if len(self.bw_map_screen.selected_entities) > 0 or self.bw_map_screen.current_entity is None:
+                    self.bw_map_screen.choose_entity(None)
+                    self.set_entity_text_multiple(self.bw_map_screen.selected_entities.keys())
                 self.bw_map_screen.update()
 
     def mouse_release(self, event):
@@ -535,6 +538,13 @@ class EditorMainWindow(QMainWindow):
         if self.bw_map_screen.selectionbox_end is not None:
             self.bw_map_screen.clear_selection_box()
             self.bw_map_screen.update()
+
+    def set_entity_text_multiple(self, entities):
+        self.label_object_id.setText("{0} objects selected".format(len(entities)))
+        self.label_model_name.setText("")
+        self.label_position.setText("")
+        self.label_4.setText("")
+        self.label_5.setText("")
 
     def set_entity_text(self, entityid):
         try:

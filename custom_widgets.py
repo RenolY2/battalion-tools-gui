@@ -417,7 +417,7 @@ class BWMapViewer(QWidget):
 
     def set_selectionbox_start(self, start):
         self.selectionbox_start = start
-        self.selected_entities = {}
+        #self.selected_entities = {}
 
     def set_selectionbox_end(self, end):
         self.selectionbox_end = end
