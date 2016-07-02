@@ -373,7 +373,7 @@ class BWMapViewer(QWidget):
 
         # Draw the currently selected entity last so it is always above all other entities.
         for selected_entity in chain([self.current_entity], selected_entities.keys()):
-            if selected_entity is None:
+            if selected_entity is None or selected_entity not in self.entities:
                 continue
             x, y, entitytype, metadata = self.entities[selected_entity]
             x *= zf

@@ -462,23 +462,29 @@ class EditorMainWindow(QMainWindow):
 
     def remove_position(self):
         #self.bw_map_screen.entities.pop()
-        current_entity = self.bw_map_screen.current_entity
-        if current_entity is not None:
-            try:
-                # Remove the entity from the map, the list widget and the level data
-                self.deleting_item = True
-                pos = self.get_entity_item_pos(current_entity)
-                item = self.entity_list_widget.takeItem(pos)
-                assert item.xml_ref == current_entity
-                #self.entity_list_widget.clearSelection()
-                self.entity_list_widget.clearFocus()
-                self.entity_list_widget.removeItemWidget(item)
-                self.level.remove_object(current_entity)
-                self.bw_map_screen.remove_entity(current_entity)
+        try:
+            # Remove the entity from the map, the list widget and the level data
+            self.deleting_item = True
+            entities = []
+            if self.bw_map_screen.current_entity is not None:
+                entities.append(self.bw_map_screen.current_entity)
+            elif len(self.bw_map_screen.selected_entities) > 0:
+                entities.extend(self.bw_map_screen.selected_entities.keys())
+                self.bw_map_screen.selected_entites = {}
+            if len(entities) > 0:
+                for entity in entities:
+                    pos = self.get_entity_item_pos(entity)
+                    item = self.entity_list_widget.takeItem(pos)
+                    assert item.xml_ref == entity
+                    #self.entity_list_widget.clearSelection()
+                    self.entity_list_widget.clearFocus()
+                    self.entity_list_widget.removeItemWidget(item)
+                    self.level.remove_object(entity)
+                    self.bw_map_screen.remove_entity(entity)
                 self.bw_map_screen.update()
-            except:
-                traceback.print_exc()
-                raise
+        except:
+            traceback.print_exc()
+            raise
 
     #@catch_exception
     def get_position(self, event):
