@@ -240,14 +240,6 @@ class EditorMainWindow(QMainWindow):
 
                     self.bw_map_screen.add_entity(x, y, cloned_id, obj.type)
 
-
-                    #self.choose_entity(newid)
-                    #if len(entities) == 1:
-                    #    self.bw_map_screen.choose_entity(cloned_id)
-                    #    self.set_entity_text(cloned_id)
-                    print("CREATED:", cloned_id)
-
-
                     clonedobj = self.level.obj_map[cloned_id]
                     update_mapscreen(self.bw_map_screen, clonedobj)
                     if clonedobj.has_attr("mPassenger"):
@@ -447,21 +439,21 @@ class EditorMainWindow(QMainWindow):
 
     def entity_position(self, event, entity):
         try:
+            if not self.moving:
+                print("got entity:",entity, self.bw_map_screen.entities[entity][2])
+                print(entity_get_model(self.level, entity))
+                self.set_entity_text(entity)
+                self.bw_map_screen.choose_entity(entity)
+                pos = self.get_entity_item_pos(entity)
+                print("searching:",pos)
+                try:
+                    self.entity_list_widget.select_item(pos)
+                except:
+                    traceback.print_exc()
+                self.bw_map_screen.selected_entities = {}
 
-            print("got entity:",entity, self.bw_map_screen.entities[entity][2])
-            print(entity_get_model(self.level, entity))
-            self.set_entity_text(entity)
-            self.bw_map_screen.choose_entity(entity)
-            pos = self.get_entity_item_pos(entity)
-            print("searching:",pos)
-            try:
-                self.entity_list_widget.select_item(pos)
-            except:
-                traceback.print_exc()
-            try:
                 self.bw_map_screen.update()
-            except:
-                traceback.print_exc()
+
         except:
             traceback.print_exc()
 

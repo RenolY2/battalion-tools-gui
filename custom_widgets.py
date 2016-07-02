@@ -379,9 +379,10 @@ class BWMapViewer(QWidget):
             x *= zf
             y *= zf
 
-            p.setBrush(QColor("red"))
+
 
             if entitytype == "cMapZone":
+                p.setBrush(QColor("red"))
                 self.draw_entity(p, x, y, ENTITY_SIZE, zf,selected_entity, metadata)
                 pen = p.pen()
                 pen.setColor(DEFAULT_SELECTED)
@@ -393,7 +394,9 @@ class BWMapViewer(QWidget):
                 pen.setWidth(origwidth)
                 p.setPen(pen)
             else:
-                self.draw_entity(p, x, y, ENTITY_SIZE, zf, selected_entity, metadata)
+                if x >= startx and y >= starty and x <= endx and y <= endy:
+                    p.setBrush(QColor("red"))
+                    self.draw_entity(p, x, y, ENTITY_SIZE, zf, selected_entity, metadata)
 
             p.setBrush(DEFAULT_ENTITY)
 
