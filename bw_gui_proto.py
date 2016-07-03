@@ -235,7 +235,10 @@ class EditorMainWindow(QMainWindow):
                             dont_clone[passenger] = True
 
             for entity in entities:
+                if entity in dont_clone:
+                    continue
                 obj = self.level.obj_map[entity]
+
                 xml_node = deepcopy(obj._xml_node)
                 try:
                     cloned_id = self.level.generate_unique_id(entity)
@@ -259,7 +262,7 @@ class EditorMainWindow(QMainWindow):
                         passengers_added = []
 
                         for i, passenger in enumerate(passengers):
-                            if passenger != "0" and passenger not in dont_clone:
+                            if passenger != "0":
                                 obj = self.level.obj_map[passenger]
                                 xml_node = deepcopy(obj._xml_node)
 
