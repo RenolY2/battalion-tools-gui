@@ -233,10 +233,11 @@ class EditorMainWindow(QMainWindow):
                     for passenger in passengers:
                         if passenger != "0":
                             dont_clone[passenger] = True
-
+            select = []
             for entity in entities:
                 if entity in dont_clone:
                     continue
+
                 obj = self.level.obj_map[entity]
 
                 xml_node = deepcopy(obj._xml_node)
@@ -253,6 +254,7 @@ class EditorMainWindow(QMainWindow):
                     self.bw_map_screen.add_entity(x, y, cloned_id, obj.type)
 
                     clonedobj = self.level.obj_map[cloned_id]
+                    select.append(cloned_id)
                     update_mapscreen(self.bw_map_screen, clonedobj)
                     if clonedobj.has_attr("mPassenger"):
                         orig_x = bw_x
@@ -286,7 +288,13 @@ class EditorMainWindow(QMainWindow):
                                 update_mapscreen(self.bw_map_screen, self.level.obj_map[clonedpassenger_id])
                                 passengers_added.append(passenger)
                                 clonedobj.set_attr_value("mPassenger", clonedpassenger_id, i)
+                                select.append(clonedpassenger_id)
                         #print("passengers added:", passengers_added)
+                    self.bw_map_screen.selected_entities = {}
+                    for ent in select:
+                        self.bw_map_screen.selected_entities[ent] = True
+                    self.set_entity_text_multiple(self.bw_map_screen.selected_entities)
+                    self.bw_map_screen.update()
                 except:
                     traceback.print_exc()
 
@@ -481,7 +489,8 @@ class EditorMainWindow(QMainWindow):
                 entities.append(self.bw_map_screen.current_entity)
             elif len(self.bw_map_screen.selected_entities) > 0:
                 entities.extend(self.bw_map_screen.selected_entities.keys())
-                self.bw_map_screen.selected_entites = {}
+                self.bw_map_screen.selected_entities = {}
+                self.set_entity_text_multiple(self.bw_map_screen.selected_entities)
             if len(entities) > 0:
                 for entity in entities:
                     pos = self.get_entity_item_pos(entity)
@@ -492,6 +501,7 @@ class EditorMainWindow(QMainWindow):
                     self.entity_list_widget.removeItemWidget(item)
                     self.level.remove_object(entity)
                     self.bw_map_screen.remove_entity(entity)
+
                 self.bw_map_screen.update()
         except:
             traceback.print_exc()
@@ -559,11 +569,6 @@ class EditorMainWindow(QMainWindow):
 
                         update_mapscreen(self.bw_map_screen, self.level.obj_map[entity])
 
-
-
-
-
-
             self.bw_map_screen.update()
 
     @catch_exception
@@ -588,7 +593,7 @@ class EditorMainWindow(QMainWindow):
                 self.bw_map_screen.set_selectionbox_end((event.x(), event.y()))
                 if len(self.bw_map_screen.selected_entities) > 0 or self.bw_map_screen.current_entity is None:
                     self.bw_map_screen.choose_entity(None)
-                    self.set_entity_text_multiple(self.bw_map_screen.selected_entities.keys())
+                    self.set_entity_text_multiple(self.bw_map_screen.selected_entities)
                 self.bw_map_screen.update()
 
     def mouse_release(self, event):
@@ -599,10 +604,15 @@ class EditorMainWindow(QMainWindow):
 
     def set_entity_text_multiple(self, entities):
         self.label_object_id.setText("{0} objects selected".format(len(entities)))
-        self.label_model_name.setText("")
-        self.label_position.setText("")
-        self.label_4.setText("")
-        self.label_5.setText("")
+        MAX = 15
+        listentities = [self.level.obj_map[x].name for x in sorted(entities.keys())][0:MAX]
+        listentities.sort()
+        if len(entities) > MAX:
+            listentities.append("... and {0} more".format(len(entities) - len(listentities)))
+        self.label_position.setText("\n".join(listentities[:5]))
+        self.label_model_name.setText("\n".join(listentities[5:10]))
+        self.label_4.setText("\n".join(listentities[10:]))#15]))
+        self.label_5.setText("")#("\n".join(listentities[12:16]))
 
     def set_entity_text(self, entityid):
         try:
@@ -811,7 +821,7 @@ class EditorMainWindow(QMainWindow):
         self.horizontalLayout.addItem(spacerItem)
 
         self.vertLayoutWidget = QWidget(self.centralwidget)
-        self.vertLayoutWidget.setMaximumSize(QSize(200, 600))
+        self.vertLayoutWidget.setMaximumSize(QSize(250, 1200))
         self.verticalLayout = QVBoxLayout(self.vertLayoutWidget)
         self.verticalLayout.setObjectName("verticalLayout")
         #self.verticalLayout.
