@@ -225,6 +225,15 @@ class EditorMainWindow(QMainWindow):
             entities.extend(self.bw_map_screen.selected_entities.keys())
 
         if len(entities) > 0:
+            dont_clone = {}
+            for entity in entities:
+                obj = self.level.obj_map[entity]
+                if obj.has_attr("mPassenger"):
+                    passengers = obj.get_attr_elements("mPassenger")
+                    for passenger in passengers:
+                        if passenger != "0":
+                            dont_clone[passenger] = True
+
             for entity in entities:
                 obj = self.level.obj_map[entity]
                 xml_node = deepcopy(obj._xml_node)
@@ -250,7 +259,7 @@ class EditorMainWindow(QMainWindow):
                         passengers_added = []
 
                         for i, passenger in enumerate(passengers):
-                            if passenger != "0":
+                            if passenger != "0" and passenger not in dont_clone:
                                 obj = self.level.obj_map[passenger]
                                 xml_node = deepcopy(obj._xml_node)
 
