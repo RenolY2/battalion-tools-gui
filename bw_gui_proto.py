@@ -451,7 +451,9 @@ class EditorMainWindow(QMainWindow):
 
     def entity_position(self, event, entity):
         try:
-            if not self.moving:
+            # Make it possible to select objects in move mode, but don't make it too easy to lose
+            # a selection.
+            if not (self.moving and len(self.bw_map_screen.selected_entities) > 1):
                 print("got entity:",entity, self.bw_map_screen.entities[entity][2])
                 print(entity_get_model(self.level, entity))
                 self.set_entity_text(entity)
