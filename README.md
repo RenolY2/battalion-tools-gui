@@ -37,8 +37,9 @@ with yellow and brown (brown being higher) becoming higher and more mountainous.
 are very high, with white being the top parts of the terrain.
 
 ## Lightmap view
-This visualizes the backed lightning. For the most part, it is used mostly for shadows in the
-terrain, though in some maps it also used for light from light sources, e.g. lamps.
+This visualizes the backed lightning. For the most part, it is used for shadows in the
+terrain and to give the level a specific tone, e.g. green-ish light in Xylvania levels,
+though in some maps it also used for light from light sources, e.g. lamps.
 
 
 
