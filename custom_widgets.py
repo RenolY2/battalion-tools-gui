@@ -6,9 +6,9 @@ from copy import copy
 from math import sin, cos, atan2, radians
 from itertools import chain
 
-from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap
+from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap, QKeySequence
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu,
-                            QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit)
+                            QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit, QAction, QShortcut)
 from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
 from PyQt5.QtCore import Qt
 
@@ -554,7 +554,43 @@ class BWPassengerWindow(QMdiSubWindow):
         self.setWindowTitle("Passengers - {0}".format(entityname))
 
 
+class XMLTextEdit(QTextEdit):
+    #mouse_clicked = pyqtSignal(QMouseEvent)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        """self.goto_id_action = QAction("Go To ID", self)
+        self.goto_shortcut = QKeySequence(Qt.CTRL+Qt.Key_G)
+        self.goto_id_action.setShortcut(self.goto_shortcut)
+        self.goto_id_action.setShortcutContext(Qt.WidgetShortcut)"""
+
+        #self.context_menu.exec(event.globalPos())
+        #self.context_menu.destroy()
+
+
+class ActionWithOwner(QAction):
+    triggered_owner = pyqtSignal(object)
+
+    def __init__(self, *args, **kwargs):
+        self.action_owner = kwargs["action_owner"]
+        del kwargs["action_owner"]
+
+        super().__init__(*args, **kwargs)
+
+        self.triggered.connect(self.triggered_with_owner)
+
+    def triggered_with_owner(self):
+        self.triggered_owner.emit(self.action_owner)
+
+
+
+
+
 class BWEntityXMLEditor(QMdiSubWindow):
+    triggered = pyqtSignal(object)
+    closing = pyqtSignal(object)
+
     def __init__(self, *args, **kwargs):
         if "windowtype" in kwargs:
             self.windowname = kwargs["windowtype"]
@@ -563,8 +599,6 @@ class BWEntityXMLEditor(QMdiSubWindow):
             self.windowname = "XML Object"
 
         super().__init__(*args, **kwargs)
-
-
 
         self.resize(900, 500)
         self.setMinimumSize(QSize(300, 300))
@@ -579,12 +613,34 @@ class BWEntityXMLEditor(QMdiSubWindow):
         font.setFixedPitch(True)
         font.setPointSize(10)
 
+
+        self.dummywidget = QWidget(self)
+        self.dummywidget.setMaximumSize(0,0)
+
         self.verticalLayout = QVBoxLayout(self.centralwidget)
-        self.textbox_xml = QTextEdit(self.centralwidget)
+        self.verticalLayout.addWidget(self.dummywidget)
+
+
+        self.goto_id_action = ActionWithOwner("Go To ID", self, action_owner=self)
+
+        self.addAction(self.goto_id_action)
+
+        self.goto_shortcut = QKeySequence(Qt.CTRL+Qt.Key_G)
+
+
+        self.goto_id_action.setShortcut(self.goto_shortcut)
+        #self.goto_id_action.setShortcutContext(Qt.WidgetShortcut)
+        self.goto_id_action.setAutoRepeat(False)
+
+        self.goto_id_action.triggered_owner.connect(self.open_new_window)
+
+        self.textbox_xml = XMLTextEdit(self.centralwidget)
         self.button_xml_savetext = QPushButton(self.centralwidget)
         self.button_xml_savetext.setText("Save XML")
         self.button_xml_savetext.setMaximumWidth(400)
         self.textbox_xml.setLineWrapMode(QTextEdit.NoWrap)
+        self.textbox_xml.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.textbox_xml.customContextMenuRequested.connect(self.my_context_menu)
 
         metrics = QFontMetrics(font)
         self.textbox_xml.setTabStopWidth(4 * metrics.width(' '))
@@ -598,6 +654,27 @@ class BWEntityXMLEditor(QMdiSubWindow):
         try:
             self.textbox_xml.setText(etree.tostring(xmlnode, encoding="unicode"))
             self.entity = xmlnode.get("id")
+        except:
+            traceback.print_exc()
+
+    def open_new_window(self, owner):
+        #print("It was pressed!", owner)
+        #print("selected:", owner.textbox_xml.textCursor().selectedText())
+
+        self.triggered.emit(self)
+
+    def my_context_menu(self, position):
+        try:
+            #print("Triggered!")
+            #print(event.x(), event.y())
+            #print(args)
+            context_menu = self.textbox_xml.createStandardContextMenu()
+            context_menu.addAction(self.goto_id_action)
+            context_menu.exec(self.mapToGlobal(position))
+            context_menu.destroy()
+            del context_menu
+            #self.context_menu.exec(event.globalPos())
+            #return super().contextMenuEvent(event)
         except:
             traceback.print_exc()
 

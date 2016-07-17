@@ -14,7 +14,7 @@ from os import path
 from timeit import default_timer
 from math import atan2, degrees, radians, sin, cos
 
-from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
+from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication, QPoint
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QLineEdit)
@@ -89,14 +89,20 @@ class EditorMainWindow(QMainWindow):
 
         self.xmlobject_textbox = BWEntityXMLEditor()
         self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
+        self.xmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
+
 
         self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
         self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
+        self.basexmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
 
         self.types_visible = {}
         self.terrain_image = None
 
         status.showMessage("Ready")
+
+        self.xml_windows = {}
+        print("We are now ready!")
 
     def reset(self):
         self.resetting = True
@@ -120,15 +126,74 @@ class EditorMainWindow(QMainWindow):
             window.close()
             window.reset()
 
+        for id in self.xml_windows:
+            self.destroy_xml_editor(id)
+
         self.resetting = False
 
         print("reset done")
 
+    def destroy_xml_editor(self, id):
+        pass
+
+    @catch_exception
+    def action_open_xml_editor_unlimited(self, xml_editor_owner):
+        selected = xml_editor_owner.textbox_xml.textCursor().selectedText()
+        if self.level is not None and selected in self.level.obj_map:
+            delete = []
+            for objid, window in self.xml_windows.items():
+                if not window.isVisible() and objid != selected:
+                    window.destroy()
+                    delete.append(objid)
+            for objid in delete:
+                del self.xml_windows[objid]
+
+            if selected == self.basexmlobject_textbox.entity or selected == self.xmlobject_textbox.entity:
+                pass # No need to make a new window
+            elif selected in self.xml_windows and self.xml_windows[selected].isVisible():
+                self.xml_windows[selected].activateWindow()
+                self.xml_windows[selected].update()
+
+            else:
+                xml_window = BWEntityXMLEditor()
+
+                def xmleditor_save_object_unlimited():
+                    self.statusbar.showMessage("Saving object changes...")
+                    try:
+                        xmlnode = xml_window.get_content()
+                        #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
+                        assert xml_window.entity == xmlnode.get("id")  # Disallow changing the id of the base object
+
+                        self.level.remove_object(xmlnode.get("id"))
+                        self.level.add_object(xmlnode)
+
+                        self.statusbar.showMessage("Saved base object {0} as {1}".format(
+                            xml_window.entity, self.level.obj_map[xmlnode.get("id")].name))
+                    except:
+                        self.statusbar.showMessage("Saving object failed")
+                        traceback.print_exc()
+
+                xml_window.button_xml_savetext.pressed.connect(xmleditor_save_object_unlimited)
+                xml_window.triggered.connect(self.action_open_xml_editor_unlimited)
+
+
+                obj = self.level.obj_map[selected]
+                xml_window.set_title(obj.name)
+
+                xml_window.set_content(obj._xml_node)
+                xml_window.move(QPoint(xml_editor_owner.pos().x()+20, xml_editor_owner.pos().y()+20))
+                xml_window.show()
+                xml_window.update()
+                self.xml_windows[selected] = xml_window
+
+
+    @catch_exception
     def action_open_basexml_editor(self):
         if not self.basexmlobject_textbox.isVisible():
             self.basexmlobject_textbox.destroy()
             self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
             self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
+            self.basexmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
             self.basexmlobject_textbox.show()
 
         self.basexmlobject_textbox.activateWindow()
@@ -166,6 +231,7 @@ class EditorMainWindow(QMainWindow):
             self.xmlobject_textbox.destroy()
             self.xmlobject_textbox = BWEntityXMLEditor()
             self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
+            self.xmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
             self.xmlobject_textbox.show()
 
         self.xmlobject_textbox.activateWindow()
