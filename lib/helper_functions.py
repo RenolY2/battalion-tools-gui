@@ -234,6 +234,26 @@ def get_water_height(bw_level):
     print("did not find render params :(")
     return None
 
+
+COLORS = []
+for coltrans in [
+    ((106, 199, 242), (190, 226, 241), 3), # Ocean level
+    ((190, 226, 241), (120, 147, 78), 2), # Transition Ocean->Ground
+    ((120, 147, 78), (147,182,95), 5), # Ground level
+    ((147,182,95), (249, 239, 160), 5), # Higher areas, going into mountains, green to yellow
+    ((249, 239, 160), (214, 127, 70), 5), # Even higher, yellow to brown
+    ((214, 127, 70), (150, 93, 60), 6), # brown to dark brown #(119, 68, 39)
+    ((150, 93, 60), (130,130, 130), 6), # dark brown to grey, very high
+    (((130,130, 130), (255, 255, 255), 7))]: # grey to white, very very high
+
+    start, end, repeat = coltrans
+    for i, color in enumerate(make_gradient(start, end)):
+        #if i % 2 == 0: continue
+        for j in range(repeat):
+            COLORS.append(color)
+            #colors.extend([make_gradient(start, end))
+
+
 def parse_terrain_to_image(terrainfile, waterheight=None):
     # In BWii the entry at position 1 is not KNHC, but something else that needs to be skipped
     if terrainfile.entries[1].name != b"KNHC":
@@ -249,26 +269,10 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
     light_pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
 
     #colortransition = QImage(os.path.join("lib", "colors_terrainview.png"), "PNG")
-    colors = []
+    #colors = []
 
     #for i in range(colortransition.width()):
     #    colors.append(colortransition.pixel(i, 0))
-    for coltrans in [
-        ((106, 199, 242), (190, 226, 241), 3), # Ocean level
-        ((190, 226, 241), (120, 147, 78), 2), # Transition Ocean->Ground
-        ((120, 147, 78), (147,182,95), 5), # Ground level
-        ((147,182,95), (249, 239, 160), 5), # Higher areas, going into mountains, green to yellow
-        ((249, 239, 160), (214, 127, 70), 5), # Even higher, yellow to brown
-        ((214, 127, 70), (150, 93, 60), 6), # brown to dark brown #(119, 68, 39)
-        ((150, 93, 60), (130,130, 130), 6), # dark brown to grey, very high
-        (((130,130, 130), (255, 255, 255), 7))]: # grey to white, very very high
-
-        start, end, repeat = coltrans
-        for i, color in enumerate(make_gradient(start, end)):
-            #if i % 2 == 0: continue
-            for j in range(repeat):
-                colors.append(color)
-        #colors.extend([make_gradient(start, end))
 
     """new = QImage(len(colors), 200, QImage.Format_ARGB32)
     trans_painter = QPainter()
@@ -341,12 +345,12 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
                                     pen.setColor(QColor(0, 0, ((height>>2)+30)&0xFF))"""
 
 
-                                if height >= len(colors):
+                                if height >= len(COLORS):
 
-                                    print("oops, color out of bounds:", height, len(colors))
-                                    height = len(colors)-1
+                                    print("oops, color out of bounds:", height, len(COLORS))
+                                    height = len(COLORS)-1
 
-                                r, g, b = colors[height]
+                                r, g, b = COLORS[height]
                                 if waterheight is not None and height <= waterheight*16:
                                     r = (r+watercolor[0]) // 2
                                     g = (r+watercolor[1]) // 2
