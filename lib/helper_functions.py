@@ -254,6 +254,7 @@ for coltrans in [
             #colors.extend([make_gradient(start, end))
 
 
+
 def parse_terrain_to_image(terrainfile, waterheight=None):
     # In BWii the entry at position 1 is not KNHC, but something else that needs to be skipped
     if terrainfile.entries[1].name != b"KNHC":
@@ -263,7 +264,7 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
 
     tiles = terrainfile.entries[1+off] # KNHC
     #tiles2 = terrainfile.entries[4+off] # TWCU
-    tilemap = terrainfile.entries[3+off]
+    tilemap = terrainfile.entries[3+off] # PAMC
     #tilemapdata = bytes(tilemap.data)
     pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
     light_pic = QImage(64*4*4, 64*4*4, QImage.Format_ARGB32)
