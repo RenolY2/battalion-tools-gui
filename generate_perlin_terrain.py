@@ -80,17 +80,7 @@ def bicubic_interpolate_noise(noisemap, factor):
             y_start = y // 4
 
             for ix in range(2):
-                #row1 = [noisemap[(x+ix-1)%size_x][(y+iy-1)%size_y], noisemap[(x+ix)%size_x][(y+iy-1)%size_y],
-                #        noisemap[(x+ix+1)%size_x][(y+iy-1)%size_y], noisemap[(x+ix+2)%size_x][(y+iy-1)%size_y]]
-                #point1 = noisemap[(x+ix-1)%size_x][(y)%size_y]
-                #point2 = noisemap[(x+ix)%size_x][(y)%size_y]
-                #point3 = noisemap[(x+ix+1)%size_x][(y)%size_y]
-                #point4 = noisemap[(x+ix+2)%size_x][(y)%size_y]
                 for iy in range(2):
-                    #point1 = noisemap[(x+ix)%size_x][(y+iy-1)%size_y]
-                    #point2 = noisemap[(x+ix)%size_x][(y+iy)%size_y]
-                    #point3 = noisemap[(x+ix)%size_x][(y+iy+1)%size_y]
-                    #point4 = noisemap[(x+ix)%size_x][(y+iy+2)%size_y]
                     row1 = [noisemap[(x+ix-1)%size_x][(y+iy-1)%size_y], noisemap[(x+ix)%size_x][(y+iy-1)%size_y],
                             noisemap[(x+ix+1)%size_x][(y+iy-1)%size_y], noisemap[(x+ix+2)%size_x][(y+iy-1)%size_y]]
 
@@ -103,13 +93,11 @@ def bicubic_interpolate_noise(noisemap, factor):
                     row4 = [noisemap[(x+ix-1)%size_x][(y+iy+2)%size_y], noisemap[(x+ix)%size_x][(y+iy+2)%size_y],
                             noisemap[(x+ix+1)%size_x][(y+iy+2)%size_y], noisemap[(x+ix+2)%size_x][(y+iy+2)%size_y]]
 
-                    #row1, row2, row3, row4 = list(reversed(row1)), list(reversed(row2)), list(reversed(row3)), list(reversed(row4))
 
                     for iix in range(factor):
                         for iiy in range(factor):
-                            mini_x = iix / float(factor) #((ix*factor+iix)/float(2*factor)) #1
-                            mini_y = iiy / float(factor) #((iy*factor+iiy)/float(2*factor)) #1
-                            #print(mini_x,mini_y)
+                            mini_x = iix / float(factor)
+                            mini_y = iiy / float(factor)
                             if x*factor+ix*factor+iix < size_x*factor and y*factor+iy*factor+iiy < size_y*factor:
                                 #val = bicubic_interpolate(mini_x, mini_y, row1, row2, row3, row4)
                                 val1 = cubic_interpolate(mini_x, *row1)
@@ -120,10 +108,6 @@ def bicubic_interpolate_noise(noisemap, factor):
                                 val = cubic_interpolate(mini_y, val1, val2, val3, val4)
 
                                 newnoise[x*factor+ix*factor+iix][y*factor+iy*factor+iiy] = val
-                            #if ix == 1 and iix == factor-1:
-                            #    newnoise[x*factor+ix*factor+iix][y*factor+iy*factor+iiy] = 255
-                            #if iy == 1 and iiy == factor-1:
-                            #    newnoise[x*factor+ix*factor+iix][y*factor+iy*factor+iiy] = 255
     return newnoise
 
 
@@ -255,60 +239,6 @@ biomes = {
     "normal": (1/64.0, 1/64.0, 1/16.0, 1/8.0, 1/8.0, 1/16.0, 1/8.0),#, 1/8.0),
 
     "special": (1/128.0, 1/128.0, 1/96.0, 1/64.0, 1/32.0, 1/32.0, 1/64.0)}#, 1/128.0)}
-
-"""
-values = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 5, 0, 1]
-
-scale = 10
-last = 0
-
-offset = 10
-
-for x, val in enumerate(values):
-    for i in range(scale):
-        y = linear_interpolate(last, val, (i)/float(scale))
-        draw_height(x*scale + i, offset + y*10, 0)
-    last = val
-
-offset = 50
-length = len(values)
-
-
-
-for j in range(10):
-    offset += 40
-
-    for x in range(0, length, 2):
-        ix = 0
-
-
-
-
-        for ix in range(2):
-            point2 = values[(x+ix)%length]
-
-
-            point3 = values[(x+ix+1)%length]
-
-            if x+ix-1 < 0:
-                point1 = 2*point2 - point3
-            else:
-                point1 = values[(x+ix-1)%length]
-
-
-            if x+ix+2 >= length:
-                point4 = 2*point3-point2
-            else:
-                point4 = values[(x+ix+2)%length]
-
-            for i in range(scale*100):
-                i = i / 100.0
-                iix = ix*scale + i
-                #iix/float(4*scale)+0.25
-                #ix+i/float(scale)-0.75
-                y = cubic(i / (float(scale)), point1, point2, point3, point4)
-                draw_height((x+ix)*scale + i, offset + y*10, 0)
-"""
 
 
 for x in range(MAX_X-1, 0, -1):
