@@ -302,6 +302,7 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
 
     lowest_values = {}
     total_lowest_color = None
+    outofbounds_count = 0
 
     for x in range(64):
         for y in range(64):
@@ -348,7 +349,8 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
 
                                 if height >= len(COLORS):
 
-                                    print("oops, color out of bounds:", height, len(COLORS))
+                                    #print("oops, color out of bounds:", height, len(COLORS))
+                                    outofbounds_count += 1
                                     height = len(COLORS)-1
 
                                 r, g, b = COLORS[height]
@@ -384,6 +386,8 @@ def parse_terrain_to_image(terrainfile, waterheight=None):
     print(lowest, hex(lowest))
     heights.sort()
     print(heights)
+    if outofbounds_count > 0:
+        print("{0} points out of bounds".format(outofbounds_count))
 
     finalimage = QImage(pic.width(), pic.height(), QImage.Format_ARGB32)
     p.begin(finalimage)
