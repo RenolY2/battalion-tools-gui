@@ -8,6 +8,7 @@
 
 import traceback
 import itertools
+import gzip
 from copy import copy, deepcopy
 import os
 from os import path
@@ -37,6 +38,8 @@ from lib.helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
                                   object_set_position, object_get_position, get_position_attribute, get_type,
                                   parse_terrain_to_image, get_water_height)
 
+BW_LEVEL = "BW level files (*_level.xml *_level.xml.gz)"
+BW_COMPRESSED_LEVEL = "BW compressed level files (*_level.xml.gz)"
 
 class EditorMainWindow(QMainWindow):
     def __init__(self):
@@ -462,14 +465,23 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.default_path,
-                "BW level files (*_level.xml);;All files (*)")
+                BW_LEVEL+";;"+BW_COMPRESSED_LEVEL+";;All files (*)")
             print("doooone")
             if filepath:
                 print("resetting")
                 self.reset()
                 print("done")
+                print("chosen type:",choosentype)
 
-                with open(filepath, "rb") as f:
+                # Some BW levels are clear XML files, some are compressed with GZIP
+                # We decide between the two either based on user choice or end of filepath
+                if choosentype == BW_COMPRESSED_LEVEL or filepath.endswith(".gz"):
+                    print("OPENING AS COMPRESSED")
+                    file_open = gzip.open
+                else:
+                    file_open = open
+
+                with file_open(filepath, "rb") as f:
                     try:
                         self.level = BattWarsLevel(f)
                         self.default_path = filepath
@@ -513,10 +525,17 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getSaveFileName(
                 self, "Save File",
                 self.default_path,
-                "BW level files (*_level.xml);;All files (*)")
+                BW_LEVEL+";;"+BW_COMPRESSED_LEVEL+";;All files (*)")
             print(filepath, "saved")
+
             if filepath:
-                with open(filepath, "wb") as f:
+                # Simiar to load level
+                if choosentype == BW_COMPRESSED_LEVEL or filepath.endswith(".gz"):
+                    file_open = gzip.open
+                else:
+                    file_open = open
+
+                with file_open(filepath, "wb") as f:
                     self.level._tree.write(f)
 
                 self.default_path = filepath
@@ -835,10 +854,15 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.default_path,
-                "BW terrain files (*.out);;All files (*)")
+                "BW terrain files (*.out *out.gz);;All files (*)")
             print("doooone")
             if filepath:
-                with open(filepath, "rb") as f:
+                if filepath.endswith(".gz"):
+                    file_open = gzip.open
+                else:
+                    file_open = open
+
+                with file_open(filepath, "rb") as f:
                     try:
                         terrain = BWArchiveBase(f)
                         if self.level is not None:
