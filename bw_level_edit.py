@@ -360,9 +360,14 @@ class EditorMainWindow(QMainWindow):
                                 select.append(clonedpassenger_id)
                         #print("passengers added:", passengers_added)
                     self.bw_map_screen.selected_entities = {}
-                    for ent in select:
-                        self.bw_map_screen.selected_entities[ent] = True
-                    self.set_entity_text_multiple(self.bw_map_screen.selected_entities)
+                    if len(select) == 1:
+                        ent = select[0]
+                        self.set_entity_text(ent)
+                        self.bw_map_screen.choose_entity(ent)
+                    else:
+                        for ent in select:
+                            self.bw_map_screen.selected_entities[ent] = True
+                        self.set_entity_text_multiple(self.bw_map_screen.selected_entities)
                     self.bw_map_screen.update()
                 except:
                     traceback.print_exc()
@@ -449,13 +454,11 @@ class EditorMainWindow(QMainWindow):
             if not self.moving:
                 self.moving = True
                 currtext = self.button_move_entity.text()
-                self.button_move_entity.setText("Stop ["+currtext+"]")
+                self.button_move_entity.setText("Stop [Move Entity]")
             else:
                 self.moving = False
 
-                currtext = self.button_move_entity.text()
-                currtext = currtext[6:]
-                currtext = currtext.strip("[]")
+                currtext = "Move Entity"
                 self.button_move_entity.setText(currtext)
 
     def button_load_level(self):
@@ -534,9 +537,12 @@ class EditorMainWindow(QMainWindow):
                     file_open = gzip.open
                 else:
                     file_open = open
-
-                with file_open(filepath, "wb") as f:
-                    self.level._tree.write(f)
+                try:
+                    with file_open(filepath, "wb") as f:
+                        self.level._tree.write(f)
+                except Exception as error:
+                    print("COULDN'T SAVE:", error)
+                    traceback.print_exc()
 
                 self.default_path = filepath
         else:
