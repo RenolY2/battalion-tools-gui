@@ -140,8 +140,8 @@ class EditorMainWindow(QMainWindow):
         pass
 
     @catch_exception
-    def action_open_xml_editor_unlimited(self, xml_editor_owner):
-        selected = xml_editor_owner.textbox_xml.textCursor().selectedText()
+    def open_xml_editor(self, objectid, offsetx=0, offsety=0):
+        selected = objectid
         if self.level is not None and selected in self.level.obj_map:
             delete = []
             for objid, window in self.xml_windows.items():
@@ -184,14 +184,25 @@ class EditorMainWindow(QMainWindow):
                 xml_window.set_title(obj.name)
 
                 xml_window.set_content(obj._xml_node)
-                xml_window.move(QPoint(xml_editor_owner.pos().x()+20, xml_editor_owner.pos().y()+20))
+                #xml_window.move(QPoint(xml_editor_owner.pos().x()+20, xml_editor_owner.pos().y()+20))
+                xml_window.move(QPoint(offsetx, offsety))
+
                 xml_window.show()
                 xml_window.update()
                 self.xml_windows[selected] = xml_window
 
 
+
+    @catch_exception
+    def action_open_xml_editor_unlimited(self, xml_editor_owner):
+        selected = xml_editor_owner.textbox_xml.textCursor().selectedText()
+        self.open_xml_editor(selected,
+                             offsetx=xml_editor_owner.pos().x()+20,
+                             offsety=xml_editor_owner.pos().y()+20)
+
     @catch_exception
     def action_open_basexml_editor(self):
+        """
         if not self.basexmlobject_textbox.isVisible():
             self.basexmlobject_textbox.destroy()
             self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
@@ -199,19 +210,15 @@ class EditorMainWindow(QMainWindow):
             self.basexmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
             self.basexmlobject_textbox.show()
 
-        self.basexmlobject_textbox.activateWindow()
+        self.basexmlobject_textbox.activateWindow()"""
         if self.level is not None and self.bw_map_screen.current_entity is not None:
             obj = self.level.obj_map[self.bw_map_screen.current_entity]
             if not obj.has_attr("mBase"):
                 pass
             else:
                 baseobj = self.level.obj_map[obj.get_attr_value("mBase")]
-                self.basexmlobject_textbox.set_title(baseobj.id)
-
-                self.basexmlobject_textbox.set_content(baseobj._xml_node)
-
-                self.basexmlobject_textbox.update()
-                #self.xmlobject_textbox.show()
+                #self.basexmlobject_textbox.set_title(baseobj.id)
+                self.open_xml_editor(baseobj.id)
 
     def xmleditor_action_save_base_object_xml(self):
         self.statusbar.showMessage("Saving base object changes...")
@@ -230,6 +237,7 @@ class EditorMainWindow(QMainWindow):
             traceback.print_exc()
 
     def action_open_xml_editor(self):
+        """
         if not self.xmlobject_textbox.isVisible():
             self.xmlobject_textbox.destroy()
             self.xmlobject_textbox = BWEntityXMLEditor()
@@ -237,14 +245,19 @@ class EditorMainWindow(QMainWindow):
             self.xmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
             self.xmlobject_textbox.show()
 
-        self.xmlobject_textbox.activateWindow()
+        self.xmlobject_textbox.activateWindow()"""
         if self.level is not None and self.bw_map_screen.current_entity is not None:
             entityobj = self.level.obj_map[self.bw_map_screen.current_entity]
-            self.xmlobject_textbox.set_title(entityobj.id)
+            self.open_xml_editor(objectid=entityobj.id)
+
+            update_mapscreen(self.bw_map_screen, self.level.obj_map[entityobj.id])
+            self.bw_map_screen.update()
+
+        """self.xmlobject_textbox.set_title(entityobj.id)
 
             self.xmlobject_textbox.set_content(entityobj._xml_node)
 
-            self.xmlobject_textbox.update()
+            self.xmlobject_textbox.update()"""
 
     def xmleditor_action_save_object_xml(self):
         self.statusbar.showMessage("Saving object changes...")
